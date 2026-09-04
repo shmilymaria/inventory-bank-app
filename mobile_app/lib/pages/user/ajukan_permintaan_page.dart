@@ -10,17 +10,20 @@ class AjukanPermintaanPage extends StatefulWidget {
 
 class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
   // ── State — gunakan List<dynamic> agar tidak ada type conflict
-  List<dynamic> _barang      = [];
-  List<dynamic> _items       = [];
-  String        _prioritas   = 'Normal';
+  List<dynamic> _barang         = [];   // seluruh katalog barang dari API
+  List<dynamic> _filteredBarang = [];   // hasil filter pencarian
+  List<dynamic> _items          = [];   // daftar barang yang diminta (cart)
+  String        _prioritas      = 'Normal';
   final TextEditingController _catatanCtrl = TextEditingController();
-  bool          _loadingBarang = true;
-  bool          _isSubmitting  = false;
+  final TextEditingController _searchCtrl  = TextEditingController();
+  bool          _loadingBarang  = true;
+  bool          _isSubmitting   = false;
 
   @override
   void initState() {
     super.initState();
     _loadBarang();
+    _searchCtrl.addListener(_onSearchChanged);
   }
 
   // ── Load daftar barang dari API ──────────────────────────
@@ -38,11 +41,20 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
         'stok'         : int.parse(b['stok'].toString()),
         'status_barang': b['status_barang'].toString(),
         'nama_kategori': b['nama_kategori'].toString(),
+        // Catatan: nama field gambar di API belum dipastikan, jadi kita
+        // coba beberapa kemungkinan nama field yang umum dipakai.
+        // Sesuaikan key di bawah ini dengan field asli dari response
+        // /barang di backend Laravel Anda jika berbeda.
+        'gambar': AppConstants.resolveImageUrl(
+          (b['gambar'] ?? b['foto'] ?? b['image'] ?? b['foto_barang'])
+              ?.toString(),
+        ),
       }).toList();
 
       setState(() {
-        _barang        = parsed;
-        _loadingBarang = false;
+        _barang         = parsed;
+        _filteredBarang = parsed;
+        _loadingBarang  = false;
       });
     } else {
       setState(() => _loadingBarang = false);
@@ -52,64 +64,75 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
     }
   }
 
-  // ── Ambil nilai int dari item map ────────────────────────
+  // ── Ambil nilai dari item map ─────────────────────────────
   int _intVal(dynamic item, String key) =>
       int.parse(item[key].toString());
 
   String _strVal(dynamic item, String key) =>
       item[key]?.toString() ?? '';
 
-  // ── Tambah item baru ke daftar ───────────────────────────
-  void _addItem() {
-    if (_barang.isEmpty) {
-      _snack('Data barang belum tersedia.', isError: true);
+  // ── Filter pencarian barang ───────────────────────────────
+  void _onSearchChanged() {
+    final query = _searchCtrl.text.trim().toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredBarang = _barang;
+      } else {
+        _filteredBarang = _barang.where((b) {
+          final nama     = _strVal(b, 'nama_barang').toLowerCase();
+          final kode     = _strVal(b, 'kode_barang').toLowerCase();
+          final kategori = _strVal(b, 'nama_kategori').toLowerCase();
+          return nama.contains(query) ||
+              kode.contains(query) ||
+              kategori.contains(query);
+        }).toList();
+      }
+    });
+  }
+
+  // ── Cari index item di cart berdasarkan barang_id ────────
+  int _cartIndexOf(int barangId) =>
+      _items.indexWhere((i) => _intVal(i, 'barang_id') == barangId);
+
+  // ── Tambah barang dari katalog ke cart ────────────────────
+  void _addToCart(dynamic barang) {
+    final stok = _intVal(barang, 'stok');
+    if (stok <= 0) {
+      _snack('Stok "${_strVal(barang, 'nama_barang')}" sedang habis.',
+          isError: true);
       return;
     }
 
-    // Cari barang pertama yang belum dipilih
-    dynamic barangPilihan = _barang[0];
-    for (final b in _barang) {
-      final sudahAda = _items.any(
-          (i) => _intVal(i, 'barang_id') == _intVal(b, 'id'));
-      if (!sudahAda) {
-        barangPilihan = b;
-        break;
-      }
-    }
+    final barangId  = _intVal(barang, 'id');
+    final idxInCart = _cartIndexOf(barangId);
 
     setState(() {
-      _items.add({
-        'barang_id'   : _intVal(barangPilihan, 'id'),
-        'nama_barang' : _strVal(barangPilihan, 'nama_barang'),
-        'satuan'      : _strVal(barangPilihan, 'satuan'),
-        'stok'        : _intVal(barangPilihan, 'stok'),
-        'nama_kategori': _strVal(barangPilihan, 'nama_kategori'),
-        'jumlah'      : 1,
-        'keterangan'  : '',
-      });
+      if (idxInCart == -1) {
+        _items.add({
+          'barang_id'    : barangId,
+          'nama_barang'  : _strVal(barang, 'nama_barang'),
+          'satuan'       : _strVal(barang, 'satuan'),
+          'stok'         : stok,
+          'nama_kategori': _strVal(barang, 'nama_kategori'),
+          'gambar'       : _strVal(barang, 'gambar'),
+          'jumlah'       : 1,
+          'keterangan'   : '',
+        });
+      } else {
+        final jumlahSaatIni = _intVal(_items[idxInCart], 'jumlah');
+        if (jumlahSaatIni < stok) {
+          _items[idxInCart]['jumlah'] = jumlahSaatIni + 1;
+        } else {
+          _snack('Jumlah tidak boleh melebihi stok tersedia ($stok).',
+              isError: true);
+        }
+      }
     });
   }
 
-  // ── Hapus item ───────────────────────────────────────────
+  // ── Hapus item dari cart ──────────────────────────────────
   void _removeItem(int index) {
     setState(() => _items.removeAt(index));
-  }
-
-  // ── Ganti barang yang dipilih ────────────────────────────
-  void _onBarangChanged(int index, int barangId) {
-    final b = _barang.firstWhere(
-        (x) => _intVal(x, 'id') == barangId);
-    setState(() {
-      _items[index]['barang_id']    = _intVal(b, 'id');
-      _items[index]['nama_barang']  = _strVal(b, 'nama_barang');
-      _items[index]['satuan']       = _strVal(b, 'satuan');
-      _items[index]['stok']         = _intVal(b, 'stok');
-      _items[index]['nama_kategori']= _strVal(b, 'nama_kategori');
-      final stok = _intVal(b, 'stok');
-      if (_intVal(_items[index], 'jumlah') > stok) {
-        _items[index]['jumlah'] = stok > 0 ? 1 : 1;
-      }
-    });
   }
 
   // ── Submit permintaan ────────────────────────────────────
@@ -211,183 +234,415 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
                     ],
                   ),
                 )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child  : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-
-                      // Info
-                      Container(
-                        padding   : const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(AppConstants.primaryLightColor),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(AppConstants.primaryColor)
-                                .withOpacity(0.3),
+              : Column(
+                  children: [
+                    // ── Search bar (sticky di atas) ───────────
+                    Container(
+                      width  : double.infinity,
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      color  : Colors.white,
+                      child  : TextField(
+                        controller: _searchCtrl,
+                        decoration: InputDecoration(
+                          hintText: 'Cari nama barang, kode, atau kategori...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchCtrl.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 20),
+                                  onPressed: () => _searchCtrl.clear(),
+                                )
+                              : null,
+                          filled : true,
+                          fillColor: const Color(AppConstants.bgColor),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 0),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide  : BorderSide.none,
                           ),
                         ),
-                        child: Row(children: [
-                          const Icon(Icons.info_outline,
-                              color: Color(AppConstants.primaryColor),
-                              size : 18),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(
-                            '${_barang.length} barang tersedia. '
-                            'Pilih barang dan tentukan jumlah yang dibutuhkan.',
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color   : Color(AppConstants.primaryColor)),
-                          )),
-                        ]),
                       ),
+                    ),
 
-                      const SizedBox(height: 16),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                        child  : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
 
-                      // Prioritas & Catatan
-                      _sectionCard(
-                        title: 'Prioritas & Catatan',
-                        icon : Icons.flag_outlined,
-                        child: Column(children: [
-                          DropdownButtonFormField<String>(
-                            value    : _prioritas,
-                            decoration: InputDecoration(
-                              labelText : 'Prioritas',
-                              prefixIcon: const Icon(Icons.flag_outlined),
-                              border    : OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide  : const BorderSide(
-                                    color: primary, width: 2),
-                              ),
-                            ),
-                            items: ['Normal', 'Penting', 'Mendesak']
-                                .map((p) => DropdownMenuItem(
-                                    value: p, child: Text(p)))
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => _prioritas = v!),
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller : _catatanCtrl,
-                            maxLines   : 3,
-                            decoration : InputDecoration(
-                              labelText : 'Catatan (opsional)',
-                              hintText  : 'Tambahkan catatan atau alasan permintaan...',
-                              prefixIcon: const Icon(Icons.note_outlined),
-                              border    : OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide  : const BorderSide(
-                                    color: primary, width: 2),
-                              ),
-                            ),
-                          ),
-                        ]),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Daftar Barang
-                      _sectionCard(
-                        title: 'Daftar Barang yang Diminta'
-                            '${_items.isNotEmpty ? " (${_items.length})" : ""}',
-                        icon : Icons.shopping_cart_outlined,
-                        child: Column(children: [
-
-                          if (_items.isNotEmpty) ...[
-                            ...List.generate(
-                                _items.length,
-                                (i) => _itemRow(i, _items[i])),
-                            const SizedBox(height: 8),
-                          ],
-
-                          if (_items.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              child  : Column(children: [
-                                Icon(Icons.add_shopping_cart_outlined,
-                                    size: 40, color: Colors.grey),
-                                SizedBox(height: 8),
-                                Text('Belum ada barang ditambahkan.',
+                            // ── Katalog barang (grid ala e-commerce) ──
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Katalog Barang',
                                     style: TextStyle(
-                                        color: Colors.grey, fontSize: 13)),
-                                Text('Tap tombol di bawah untuk menambahkan.',
-                                    style: TextStyle(
-                                        color: Colors.grey, fontSize: 12)),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize  : 15)),
+                                Text(
+                                  '${_filteredBarang.length} barang',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+
+                            _filteredBarang.isEmpty
+                                ? Padding(
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 40),
+                                    child: Center(
+                                      child: Column(children: [
+                                        Icon(Icons.search_off,
+                                            size: 48,
+                                            color: Colors.grey.shade400),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Barang "${_searchCtrl.text}" tidak ditemukan.',
+                                          style: const TextStyle(
+                                              color: Colors.grey),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ]),
+                                    ),
+                                  )
+                                : GridView.builder(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount : 2,
+                                      childAspectRatio: 0.66,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing : 12,
+                                    ),
+                                    itemCount: _filteredBarang.length,
+                                    itemBuilder: (context, index) =>
+                                        _catalogCard(_filteredBarang[index]),
+                                  ),
+
+                            const SizedBox(height: 20),
+
+                            // ── Prioritas & Catatan ──────────────
+                            _sectionCard(
+                              title: 'Prioritas & Catatan',
+                              icon : Icons.flag_outlined,
+                              child: Column(children: [
+                                DropdownButtonFormField<String>(
+                                  value    : _prioritas,
+                                  decoration: InputDecoration(
+                                    labelText : 'Prioritas',
+                                    prefixIcon: const Icon(Icons.flag_outlined),
+                                    border    : OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10)),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide  : const BorderSide(
+                                          color: primary, width: 2),
+                                    ),
+                                  ),
+                                  items: ['Normal', 'Penting', 'Mendesak']
+                                      .map((p) => DropdownMenuItem(
+                                          value: p, child: Text(p)))
+                                      .toList(),
+                                  onChanged: (v) =>
+                                      setState(() => _prioritas = v!),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller : _catatanCtrl,
+                                  maxLines   : 3,
+                                  decoration : InputDecoration(
+                                    labelText : 'Catatan (opsional)',
+                                    hintText  : 'Tambahkan catatan atau alasan permintaan...',
+                                    prefixIcon: const Icon(Icons.note_outlined),
+                                    border    : OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10)),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide  : const BorderSide(
+                                          color: primary, width: 2),
+                                    ),
+                                  ),
+                                ),
                               ]),
                             ),
 
-                          const SizedBox(height: 8),
+                            const SizedBox(height: 16),
 
-                          OutlinedButton.icon(
-                            onPressed: _addItem,
-                            icon     : const Icon(Icons.add_circle_outline),
-                            label    : Text(_items.isEmpty
-                                ? 'Tambah Barang'
-                                : 'Tambah Barang Lagi'),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize    : const Size(double.infinity, 48),
-                              foregroundColor: primary,
-                              side           : const BorderSide(color: primary),
-                              shape          : RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
+                            // ── Daftar Barang yang Diminta (cart) ──
+                            _sectionCard(
+                              title: 'Daftar Barang yang Diminta'
+                                  '${_items.isNotEmpty ? " (${_items.length})" : ""}',
+                              icon : Icons.shopping_cart_outlined,
+                              child: Column(children: [
+                                if (_items.isNotEmpty)
+                                  ...List.generate(
+                                      _items.length,
+                                      (i) => _cartRow(i, _items[i])),
+
+                                if (_items.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 16),
+                                    child  : Column(children: [
+                                      Icon(Icons.add_shopping_cart_outlined,
+                                          size: 40, color: Colors.grey),
+                                      SizedBox(height: 8),
+                                      Text('Belum ada barang ditambahkan.',
+                                          style: TextStyle(
+                                              color: Colors.grey, fontSize: 13)),
+                                      Text(
+                                          'Tap barang pada katalog di atas untuk menambahkan.',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                              color: Colors.grey, fontSize: 12)),
+                                    ]),
+                                  ),
+                              ]),
                             ),
-                          ),
-                        ]),
-                      ),
 
-                      const SizedBox(height: 24),
+                            const SizedBox(height: 24),
 
-                      // Tombol Submit
-                      ElevatedButton.icon(
-                        onPressed: _isSubmitting ? null : _submit,
-                        icon     : _isSubmitting
-                            ? const SizedBox(
-                                width : 18, height: 18,
-                                child : CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2))
-                            : const Icon(Icons.send_rounded),
-                        label: Text(
-                          _isSubmitting
-                              ? 'Mengirim...' : 'Ajukan Permintaan',
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w600),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 52),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                            // ── Tombol Submit ─────────────────────
+                            ElevatedButton.icon(
+                              onPressed: _isSubmitting ? null : _submit,
+                              icon     : _isSubmitting
+                                  ? const SizedBox(
+                                      width : 18, height: 18,
+                                      child : CircularProgressIndicator(
+                                          color: Colors.white, strokeWidth: 2))
+                                  : const Icon(Icons.send_rounded),
+                              label: Text(
+                                _isSubmitting
+                                    ? 'Mengirim...' : 'Ajukan Permintaan',
+                                style: const TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.w600),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size(double.infinity, 52),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+
+                            const SizedBox(height: 8),
+                            const Center(
+                              child: Text(
+                                'Permintaan akan dikirim ke Pimpinan untuk disetujui.',
+                                style   : TextStyle(fontSize: 11, color: Colors.grey),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-
-                      const SizedBox(height: 8),
-                      const Center(
-                        child: Text(
-                          'Permintaan akan dikirim ke Pimpinan untuk disetujui.',
-                          style   : TextStyle(fontSize: 11, color: Colors.grey),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
     );
   }
 
-  // ── Widget: satu baris item barang ───────────────────────
-  Widget _itemRow(int index, dynamic item) {
-    final stok   = _intVal(item, 'stok');
-    final jumlah = _intVal(item, 'jumlah');
+  // ── Widget: kartu katalog barang (ala e-commerce) ─────────
+  Widget _catalogCard(dynamic barang) {
+    final stok      = _intVal(barang, 'stok');
+    final habis     = stok <= 0;
+    final gambar    = _strVal(barang, 'gambar');
+    final barangId  = _intVal(barang, 'id');
+    final idxInCart = _cartIndexOf(barangId);
+    final jumlahDiCart =
+        idxInCart == -1 ? 0 : _intVal(_items[idxInCart], 'jumlah');
+
+    return Opacity(
+      opacity: habis ? 0.55 : 1,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: jumlahDiCart > 0
+                  ? const Color(AppConstants.primaryColor)
+                  : Colors.grey.shade200,
+              width: jumlahDiCart > 0 ? 1.4 : 1),
+          boxShadow: [BoxShadow(
+              color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            // Gambar barang
+            Expanded(
+              child: Stack(
+                children: [
+                  ColorFiltered(
+                    colorFilter: habis
+                        ? const ColorFilter.matrix(<double>[
+                            0.2126, 0.7152, 0.0722, 0, 0,
+                            0.2126, 0.7152, 0.0722, 0, 0,
+                            0.2126, 0.7152, 0.0722, 0, 0,
+                            0,      0,      0,      1, 0,
+                          ])
+                        : const ColorFilter.mode(
+                            Colors.transparent, BlendMode.multiply),
+                    child: SizedBox(
+                      width : double.infinity,
+                      height: double.infinity,
+                      child : gambar.isNotEmpty
+                          ? Image.network(
+                              gambar,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  _catalogImagePlaceholder(),
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) return child;
+                                return Container(
+                                  color: Colors.grey.shade100,
+                                  child: const Center(
+                                    child: SizedBox(
+                                      width : 22, height: 22,
+                                      child : CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : _catalogImagePlaceholder(),
+                    ),
+                  ),
+
+                  // Badge "Stok Habis"
+                  if (habis)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.black.withOpacity(0.25),
+                        alignment: Alignment.center,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade800,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text('Stok Habis',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ),
+
+                  // Badge jumlah di cart
+                  if (!habis && jumlahDiCart > 0)
+                    Positioned(
+                      top: 6, right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(AppConstants.primaryColor),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text('$jumlahDiCart di keranjang',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Info barang
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _strVal(barang, 'nama_barang'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _strVal(barang, 'nama_kategori'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        habis
+                            ? 'Stok habis'
+                            : 'Stok: $stok ${_strVal(barang, 'satuan')}',
+                        style: TextStyle(
+                          fontSize  : 11,
+                          fontWeight: FontWeight.w600,
+                          color     : habis
+                              ? Colors.red.shade400
+                              : Colors.green.shade700,
+                        ),
+                      ),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: habis ? null : () => _addToCart(barang),
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: habis
+                                ? Colors.grey.shade300
+                                : const Color(AppConstants.primaryColor),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.add,
+                            size : 16,
+                            color: habis ? Colors.grey.shade600 : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _catalogImagePlaceholder() {
+    return Container(
+      color: const Color(AppConstants.primaryLightColor),
+      alignment: Alignment.center,
+      child: const Icon(Icons.inventory_2_outlined,
+          size: 36, color: Color(AppConstants.primaryColor)),
+    );
+  }
+
+  // ── Widget: satu baris item di cart / daftar diminta ──────
+  Widget _cartRow(int index, dynamic item) {
+    final stok    = _intVal(item, 'stok');
+    final jumlah  = _intVal(item, 'jumlah');
+    final gambar  = _strVal(item, 'gambar');
 
     return Container(
       margin    : const EdgeInsets.only(bottom: 12),
-      padding   : const EdgeInsets.all(14),
+      padding   : const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -398,12 +653,56 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-        // Header baris
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Barang ${index + 1}',
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 13,
-                  color     : Color(AppConstants.primaryColor))),
+        Row(children: [
+          // Thumbnail kecil
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width : 44, height: 44,
+              child : gambar.isNotEmpty
+                  ? Image.network(
+                      gambar,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(AppConstants.primaryLightColor),
+                        child: const Icon(Icons.inventory_2_outlined,
+                            size: 20, color: Color(AppConstants.primaryColor)),
+                      ),
+                    )
+                  : Container(
+                      color: const Color(AppConstants.primaryLightColor),
+                      child: const Icon(Icons.inventory_2_outlined,
+                          size: 20, color: Color(AppConstants.primaryColor)),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_strVal(item, 'nama_barang'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 2),
+                Row(children: [
+                  Icon(Icons.category_outlined,
+                      size: 12, color: Colors.grey.shade500),
+                  const SizedBox(width: 3),
+                  Text(_strVal(item, 'nama_kategori'),
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  const SizedBox(width: 10),
+                  Icon(Icons.layers_outlined,
+                      size: 12, color: Colors.grey.shade500),
+                  const SizedBox(width: 3),
+                  Text('Stok: $stok ${_strVal(item, 'satuan')}',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                ]),
+              ],
+            ),
+          ),
           InkWell(
             onTap: () => _removeItem(index),
             child: Container(
@@ -418,84 +717,18 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
 
         const SizedBox(height: 10),
 
-        // Dropdown barang
-        DropdownButtonFormField<int>(
-          value    : _intVal(item, 'barang_id'),
-          isExpanded: true,
-          decoration: InputDecoration(
-            labelText  : 'Pilih Barang',
-            prefixIcon : const Icon(Icons.inventory_2_outlined, size: 20),
-            border     : OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10)),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide  : const BorderSide(
-                  color: Color(AppConstants.primaryColor), width: 2),
-            ),
-            filled     : true,
-            fillColor  : const Color(AppConstants.bgColor),
-            isDense    : true,
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 14),
-          ),
-          items: _barang.map<DropdownMenuItem<int>>((b) {
-            final bId       = _intVal(b, 'id');
-            final isChosen  = _items.asMap().entries.any((e) =>
-                e.key != index &&
-                _intVal(e.value, 'barang_id') == bId);
-            return DropdownMenuItem<int>(
-              value  : bId,
-              enabled: !isChosen,
-              child  : Text(
-                '${_strVal(b, 'nama_barang')} — '
-                'Stok: ${_intVal(b, 'stok')} ${_strVal(b, 'satuan')}',
-                overflow: TextOverflow.ellipsis,
-                style   : TextStyle(
-                    fontSize: 13,
-                    color   : isChosen ? Colors.grey : Colors.black87),
-              ),
-            );
-          }).toList(),
-          onChanged: (v) {
-            if (v != null) _onBarangChanged(index, v);
-          },
-        ),
-
-        const SizedBox(height: 8),
-
-        // Info kategori & stok
-        Row(children: [
-          const Icon(Icons.category_outlined,
-              size: 13, color: Colors.grey),
-          const SizedBox(width: 4),
-          Text(_strVal(item, 'nama_kategori'),
-              style: const TextStyle(fontSize: 11, color: Colors.grey)),
-          const SizedBox(width: 12),
-          Icon(Icons.layers_outlined,
-              size : 13,
-              color: stok > 0 ? Colors.grey : Colors.red),
-          const SizedBox(width: 4),
-          Text('Stok: $stok ${_strVal(item, 'satuan')}',
-              style: TextStyle(
-                  fontSize: 11,
-                  color   : stok > 0 ? Colors.grey : Colors.red)),
-        ]),
-
-        const SizedBox(height: 12),
-
         // Kontrol jumlah
         Row(children: [
           const Text('Jumlah:',
               style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
           const SizedBox(width: 12),
 
-          // Tombol kurang
           GestureDetector(
             onTap: () {
               if (jumlah > 1) setState(() => _items[index]['jumlah']--);
             },
             child: Container(
-              width : 36, height: 36,
+              width : 34, height: 34,
               decoration: BoxDecoration(
                 color       : jumlah > 1
                     ? const Color(AppConstants.primaryLightColor)
@@ -508,18 +741,17 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
                         : Colors.grey.shade300),
               ),
               child: Icon(Icons.remove,
-                  size : 18,
+                  size : 16,
                   color: jumlah > 1
                       ? const Color(AppConstants.primaryColor)
                       : Colors.grey),
             ),
           ),
 
-          // Tampilan jumlah
           Container(
             margin : const EdgeInsets.symmetric(horizontal: 8),
             padding: const EdgeInsets.symmetric(
-                horizontal: 20, vertical: 8),
+                horizontal: 18, vertical: 6),
             decoration: BoxDecoration(
               color       : Colors.white,
               borderRadius: BorderRadius.circular(8),
@@ -529,11 +761,10 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
             ),
             child: Text('$jumlah',
                 style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 16,
+                    fontWeight: FontWeight.bold, fontSize: 15,
                     color     : Color(AppConstants.primaryColor))),
           ),
 
-          // Tombol tambah
           GestureDetector(
             onTap: () {
               if (jumlah < stok) {
@@ -545,7 +776,7 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
               }
             },
             child: Container(
-              width : 36, height: 36,
+              width : 34, height: 34,
               decoration: BoxDecoration(
                 color       : const Color(AppConstants.primaryLightColor),
                 borderRadius: BorderRadius.circular(8),
@@ -554,7 +785,7 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
                         .withOpacity(0.4)),
               ),
               child: const Icon(Icons.add,
-                  size : 18,
+                  size : 16,
                   color: Color(AppConstants.primaryColor)),
             ),
           ),
@@ -580,6 +811,9 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
                 horizontal: 12, vertical: 10),
           ),
           style    : const TextStyle(fontSize: 13),
+          controller: TextEditingController(text: _strVal(item, 'keterangan'))
+            ..selection = TextSelection.collapsed(
+                offset: _strVal(item, 'keterangan').length),
           onChanged: (v) => _items[index]['keterangan'] = v,
         ),
       ]),
@@ -624,6 +858,8 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
   @override
   void dispose() {
     _catatanCtrl.dispose();
+    _searchCtrl.removeListener(_onSearchChanged);
+    _searchCtrl.dispose();
     super.dispose();
   }
 }

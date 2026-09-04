@@ -14,4 +14,28 @@ class AppConstants {
   static const int roleAdmin    = 1;
   static const int roleStaff    = 2;
   static const int rolePimpinan = 3;
+
+  // ── Host tanpa suffix "/api", dipakai untuk akses file storage ──
+  // Contoh: baseUrl = http://192.168.18.16:8000/api
+  //         baseHost = http://192.168.18.16:8000
+  static String get baseHost =>
+      baseUrl.endsWith('/api')
+          ? baseUrl.substring(0, baseUrl.length - '/api'.length)
+          : baseUrl;
+
+  // ── Bangun URL gambar barang dari path yang dikirim API ──────
+  // Menerima path relatif (contoh: "barang/kursi.jpg" atau
+  // "/storage/barang/kursi.jpg") maupun URL absolut yang sudah lengkap.
+  // Mengembalikan string kosong jika path kosong/null agar UI bisa
+  // menampilkan placeholder.
+  static String resolveImageUrl(String? path) {
+    if (path == null || path.trim().isEmpty) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    var clean = path.trim();
+    if (clean.startsWith('/')) clean = clean.substring(1);
+    if (!clean.startsWith('storage/')) clean = 'storage/$clean';
+    return '$baseHost/$clean';
+  }
 }
