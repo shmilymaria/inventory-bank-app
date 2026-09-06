@@ -27,8 +27,11 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
   }
 
   // ── Load daftar barang dari API ──────────────────────────
-  Future<void> _loadBarang() async {
-    setState(() => _loadingBarang = true);
+  // showFullLoader=false dipakai saat pull-to-refresh, supaya tidak
+  // menutupi layar dengan spinner besar dan cukup pakai indikator
+  // bawaan RefreshIndicator saja.
+  Future<void> _loadBarang({bool showFullLoader = true}) async {
+    if (showFullLoader) setState(() => _loadingBarang = true);
     final res = await ApiService.get('/barang');
 
     if (res['success'] == true && res['data'] != null) {
@@ -41,14 +44,7 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
         'stok'         : int.parse(b['stok'].toString()),
         'status_barang': b['status_barang'].toString(),
         'nama_kategori': b['nama_kategori'].toString(),
-        // Catatan: nama field gambar di API belum dipastikan, jadi kita
-        // coba beberapa kemungkinan nama field yang umum dipakai.
-        // Sesuaikan key di bawah ini dengan field asli dari response
-        // /barang di backend Laravel Anda jika berbeda.
-        'gambar': AppConstants.resolveImageUrl(
-          (b['gambar'] ?? b['foto'] ?? b['image'] ?? b['foto_barang'])
-              ?.toString(),
-        ),
+        'gambar': AppConstants.resolveImageUrl(b['gambar']?.toString()),
       }).toList();
 
       setState(() {
@@ -57,7 +53,7 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
         _loadingBarang  = false;
       });
     } else {
-      setState(() => _loadingBarang = false);
+      if (showFullLoader) setState(() => _loadingBarang = false);
       if (mounted) {
         _snack('Gagal memuat daftar barang.', isError: true);
       }
@@ -216,20 +212,32 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
               ),
             )
           : _barang.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+              ? RefreshIndicator(
+                  onRefresh: () => _loadBarang(showFullLoader: false),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(vertical: 120),
                     children: [
                       const Icon(Icons.inventory_2_outlined,
                           size: 60, color: Colors.grey),
                       const SizedBox(height: 12),
-                      const Text('Tidak ada barang tersedia.',
-                          style: TextStyle(color: Colors.grey)),
+                      const Center(
+                        child: Text('Tidak ada barang tersedia.',
+                            style: TextStyle(color: Colors.grey)),
+                      ),
+                      const SizedBox(height: 6),
+                      const Center(
+                        child: Text('Tarik ke bawah untuk memuat ulang.',
+                            style: TextStyle(
+                                color: Colors.grey, fontSize: 12)),
+                      ),
                       const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: _loadBarang,
-                        icon : const Icon(Icons.refresh),
-                        label: const Text('Muat Ulang'),
+                      Center(
+                        child: ElevatedButton.icon(
+                          onPressed: _loadBarang,
+                          icon : const Icon(Icons.refresh),
+                          label: const Text('Muat Ulang'),
+                        ),
                       ),
                     ],
                   ),
@@ -265,13 +273,16 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
                     ),
 
                     Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                        child  : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                      child: RefreshIndicator(
+                        onRefresh: () => _loadBarang(showFullLoader: false),
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                          child  : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
 
-                            // ── Katalog barang (grid ala e-commerce) ──
+                              // ── Katalog barang (grid ala e-commerce) ──
                             Row(
                               mainAxisAlignment:
                                   MainAxisAlignment.spaceBetween,
@@ -438,6 +449,7 @@ class _AjukanPermintaanPageState extends State<AjukanPermintaanPage> {
                             ),
                           ],
                         ),
+                      ),
                       ),
                     ),
                   ],

@@ -41,7 +41,7 @@
                 </div>
             @endif
 
-            <form method="POST" action="{{ route('barang.store') }}">
+            <form method="POST" action="{{ route('barang.store') }}" enctype="multipart/form-data">
                 @csrf
 
                 {{-- ── Informasi Dasar ── --}}
@@ -90,6 +90,22 @@
                         @error('nama_barang')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label">Gambar Barang</label>
+                        <div class="d-flex align-items-start gap-3">
+                            <img id="previewGambar" src="https://placehold.co/90x90/e3f2fd/1565C0?text=Foto"
+                                 class="rounded border" style="width:90px;height:90px;object-fit:cover;">
+                            <div class="flex-grow-1">
+                                <input type="file" name="gambar" id="inputGambar" accept="image/*"
+                                       class="form-control @error('gambar') is-invalid @enderror">
+                                @error('gambar')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                <div class="form-text">Format JPG/PNG/WEBP, maksimal 2MB. Opsional.</div>
+                            </div>
+                        </div>
                     </div>
 
                 </div>
@@ -238,6 +254,14 @@
     // Auto uppercase kode barang
     document.querySelector('[name="kode_barang"]').addEventListener('input', function () {
         this.value = this.value.toUpperCase();
+    });
+
+    // Preview gambar yang dipilih sebelum diupload
+    document.getElementById('inputGambar').addEventListener('change', function (e) {
+        const file = e.target.files[0];
+        if (file) {
+            document.getElementById('previewGambar').src = URL.createObjectURL(file);
+        }
     });
 </script>
 @endpush

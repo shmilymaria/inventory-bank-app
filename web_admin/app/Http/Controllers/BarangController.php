@@ -6,6 +6,7 @@ use App\Models\Barang;
 use App\Models\KategoriBarang;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class BarangController extends Controller
 {
@@ -64,6 +65,7 @@ class BarangController extends Controller
             'kategori_id'       => 'required|exists:kategori_barang,id',
             'kode_barang'       => 'required|string|max:50|unique:barang,kode_barang',
             'nama_barang'       => 'required|string|max:150',
+            'gambar'            => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'stok'              => 'required|integer|min:0',
             'stok_minimum'      => 'required|integer|min:0',
             'satuan'            => 'required|string|max:20',
@@ -75,6 +77,9 @@ class BarangController extends Controller
             'kode_barang.required'  => 'Kode barang wajib diisi.',
             'kode_barang.unique'    => 'Kode barang sudah digunakan.',
             'nama_barang.required'  => 'Nama barang wajib diisi.',
+            'gambar.image'          => 'File yang diupload harus berupa gambar.',
+            'gambar.mimes'          => 'Format gambar harus jpg, jpeg, png, atau webp.',
+            'gambar.max'            => 'Ukuran gambar maksimal 2MB.',
             'stok.required'         => 'Stok wajib diisi.',
             'stok.min'              => 'Stok tidak boleh negatif.',
             'stok_minimum.required' => 'Stok minimum wajib diisi.',
@@ -85,11 +90,18 @@ class BarangController extends Controller
         $stokMinimum = (int) $request->stok_minimum;
         $status      = Barang::hitungStatus($stok, $stokMinimum);
 
-        DB::transaction(function () use ($request, $stok, $stokMinimum, $status) {
+        // Simpan file gambar (jika diupload) ke storage/app/public/barang
+        $pathGambar = null;
+        if ($request->hasFile('gambar')) {
+            $pathGambar = $request->file('gambar')->store('barang', 'public');
+        }
+
+        DB::transaction(function () use ($request, $stok, $stokMinimum, $status, $pathGambar) {
             $barang = Barang::create([
                 'kategori_id'        => $request->kategori_id,
                 'kode_barang'        => strtoupper(trim($request->kode_barang)),
                 'nama_barang'        => $request->nama_barang,
+                'gambar'             => $pathGambar,
                 'stok'               => $stok,
                 'stok_minimum'       => $stokMinimum,
                 'satuan'             => $request->satuan,
@@ -157,6 +169,7 @@ class BarangController extends Controller
             'kategori_id'       => 'required|exists:kategori_barang,id',
             'kode_barang'       => 'required|string|max:50|unique:barang,kode_barang,' . $id,
             'nama_barang'       => 'required|string|max:150',
+            'gambar'            => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'stok'              => 'required|integer|min:0',
             'stok_minimum'      => 'required|integer|min:0',
             'satuan'            => 'required|string|max:20',
@@ -168,6 +181,9 @@ class BarangController extends Controller
             'kode_barang.required'  => 'Kode barang wajib diisi.',
             'kode_barang.unique'    => 'Kode barang sudah digunakan barang lain.',
             'nama_barang.required'  => 'Nama barang wajib diisi.',
+            'gambar.image'          => 'File yang diupload harus berupa gambar.',
+            'gambar.mimes'          => 'Format gambar harus jpg, jpeg, png, atau webp.',
+            'gambar.max'            => 'Ukuran gambar maksimal 2MB.',
             'stok.required'         => 'Stok wajib diisi.',
             'stok.min'              => 'Stok tidak boleh negatif.',
             'stok_minimum.required' => 'Stok minimum wajib diisi.',
@@ -179,11 +195,21 @@ class BarangController extends Controller
         $stokMinimum = (int) $request->stok_minimum;
         $status      = Barang::hitungStatus($stokBaru, $stokMinimum);
 
-        DB::transaction(function () use ($request, $barang, $stokLama, $stokBaru, $stokMinimum, $status) {
+        // Jika ada gambar baru diupload, ganti gambar lama (dan hapus file lama)
+        $pathGambar = $barang->gambar;
+        if ($request->hasFile('gambar')) {
+            if ($barang->gambar) {
+                Storage::disk('public')->delete($barang->gambar);
+            }
+            $pathGambar = $request->file('gambar')->store('barang', 'public');
+        }
+
+        DB::transaction(function () use ($request, $barang, $stokLama, $stokBaru, $stokMinimum, $status, $pathGambar) {
             $barang->update([
                 'kategori_id'        => $request->kategori_id,
                 'kode_barang'        => strtoupper(trim($request->kode_barang)),
                 'nama_barang'        => $request->nama_barang,
+                'gambar'             => $pathGambar,
                 'stok'               => $stokBaru,
                 'stok_minimum'       => $stokMinimum,
                 'satuan'             => $request->satuan,
@@ -230,6 +256,11 @@ class BarangController extends Controller
 
         // Hapus riwayat stok barang ini terlebih dahulu
         DB::table('riwayat_stok')->where('barang_id', $id)->delete();
+
+        // Hapus file gambar dari storage jika ada
+        if ($barang->gambar) {
+            Storage::disk('public')->delete($barang->gambar);
+        }
 
         $barang->delete();
 

@@ -53,11 +53,13 @@ class ApiController extends Controller
             ], 403);
         }
 
-        // Hanya Staff (2) dan Pimpinan (3) yang bisa login mobile
-        if (!in_array($user->role_id, [2, 3])) {
+        // Staff (2), Pimpinan (3), dan Admin (1) bisa login mobile.
+        // Admin dapat akses fitur krusial (scan inbound, checkout,
+        // outbound, audit) lewat mobile selain via Web.
+        if (!in_array($user->role_id, [1, 2, 3])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Akses ditolak. Admin menggunakan aplikasi Web.',
+                'message' => 'Akses ditolak.',
             ], 403);
         }
 

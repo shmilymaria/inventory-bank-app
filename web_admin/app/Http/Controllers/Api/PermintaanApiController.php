@@ -97,12 +97,15 @@ class PermintaanApiController extends Controller
                 'barang.id',
                 'barang.kode_barang',
                 'barang.nama_barang',
+                'barang.gambar',
                 'barang.stok',
                 'barang.satuan',
                 'barang.status_barang',
                 'kategori_barang.nama_kategori'
             )
-            ->where('barang.status_barang', '!=', 'Habis')
+            // Catatan: barang dengan status "Habis" tetap dikirim ke mobile
+            // (tidak difilter) supaya tetap tampil di katalog, hanya saja
+            // ditampilkan abu-abu/nonaktif di sisi aplikasi mobile.
             ->orderBy('kategori_barang.nama_kategori')
             ->orderBy('barang.nama_barang')
             ->get();

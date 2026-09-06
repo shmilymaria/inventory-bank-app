@@ -3,6 +3,11 @@
     <!-- WAJIB: izin akses internet untuk koneksi ke API Laravel -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- WAJIB: izin kamera untuk fitur scan barcode/QR (Admin) -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+
     <application
         android:label="Inventori Bank"
         android:name="${applicationName}"

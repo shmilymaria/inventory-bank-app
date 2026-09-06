@@ -142,6 +142,7 @@
                 <thead style="background:#f8faff;">
                     <tr>
                         <th class="ps-4" style="width:50px;">No</th>
+                        <th style="width:60px;">Foto</th>
                         <th>Kode</th>
                         <th>Nama Barang</th>
                         <th>Kategori</th>
@@ -158,6 +159,10 @@
                         <tr>
                             <td class="ps-4 text-muted">
                                 {{ ($barang->currentPage() - 1) * $barang->perPage() + $loop->iteration }}
+                            </td>
+                            <td>
+                                <img src="{{ $item->gambar ? asset('storage/' . $item->gambar) : 'https://placehold.co/44x44/e3f2fd/1565C0?text=%20' }}"
+                                     class="rounded border" style="width:44px;height:44px;object-fit:cover;">
                             </td>
                             <td>
                                 <code class="text-primary">{{ $item->kode_barang }}</code>
@@ -216,7 +221,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="10" class="text-center py-5 text-muted">
+                            <td colspan="11" class="text-center py-5 text-muted">
                                 <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                                 Tidak ada data barang ditemukan.
                             </td>

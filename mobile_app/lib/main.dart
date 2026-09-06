@@ -4,6 +4,7 @@ import 'package:inventori_bank/services/auth_service.dart';
 import 'package:inventori_bank/pages/login_page.dart';
 import 'package:inventori_bank/pages/user/user_main_page.dart';
 import 'package:inventori_bank/pages/pimpinan/pimpinan_main_page.dart';
+import 'package:inventori_bank/pages/admin/admin_main_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -68,11 +69,16 @@ class _SplashScreenState extends State<SplashScreen> {
     if (loggedIn) {
       final roleId = await AuthService.getRoleId();
       if (!mounted) return;
-      Navigator.pushReplacement(context, MaterialPageRoute(
-        builder: (_) => roleId == AppConstants.rolePimpinan
-            ? const PimpinanMainPage()
-            : const UserMainPage(),
-      ));
+      Widget target;
+      if (roleId == AppConstants.roleAdmin) {
+        target = const AdminMainPage();
+      } else if (roleId == AppConstants.rolePimpinan) {
+        target = const PimpinanMainPage();
+      } else {
+        target = const UserMainPage();
+      }
+      Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (_) => target));
     } else {
       Navigator.pushReplacement(context,
           MaterialPageRoute(builder: (_) => const LoginPage()));

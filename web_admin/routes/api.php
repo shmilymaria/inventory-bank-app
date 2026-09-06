@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\ApiController;
 use App\Http\Controllers\Api\PermintaanApiController;
 use App\Http\Controllers\Api\ApprovalApiController;
 use App\Http\Controllers\Api\NotifikasiApiController;
+use App\Http\Controllers\Api\Admin\InboundApiController;
 
 // ----------------------------------------------------------------
 // Public API — tidak perlu token
@@ -37,5 +38,11 @@ Route::middleware('auth.api')->group(function () {
     Route::get('/notifikasi',                      [NotifikasiApiController::class, 'index']);
     Route::patch('/notifikasi/{id}/baca',          [NotifikasiApiController::class, 'tandaiBaca']);
     Route::patch('/notifikasi/baca-semua',         [NotifikasiApiController::class, 'bacaSemua']);
+
+    // ── Admin (mobile) ──────────────────────────────────────
+    // Scan Inbound (Barang Masuk)
+    Route::get('/admin/barang/{kode_barang}', [InboundApiController::class, 'cariBarang']);
+    Route::post('/admin/inbound',             [InboundApiController::class, 'store']);
+    Route::get('/admin/inbound/riwayat',      [InboundApiController::class, 'riwayat']);
 
 });
