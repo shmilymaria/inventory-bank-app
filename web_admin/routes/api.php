@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\PermintaanApiController;
 use App\Http\Controllers\Api\ApprovalApiController;
 use App\Http\Controllers\Api\NotifikasiApiController;
 use App\Http\Controllers\Api\Admin\InboundApiController;
+use App\Http\Controllers\Api\Admin\DistribusiScanApiController;
+use App\Http\Controllers\Api\Admin\OpnameApiController;
 
 // ----------------------------------------------------------------
 // Public API — tidak perlu token
@@ -44,5 +46,21 @@ Route::middleware('auth.api')->group(function () {
     Route::get('/admin/barang/{kode_barang}', [InboundApiController::class, 'cariBarang']);
     Route::post('/admin/inbound',             [InboundApiController::class, 'store']);
     Route::get('/admin/inbound/riwayat',      [InboundApiController::class, 'riwayat']);
+
+    // Scan Checkout + Scan Outbound (Distribusi)
+    Route::get('/admin/distribusi/siap',                 [DistribusiScanApiController::class, 'siapDistribusi']);
+    Route::get('/admin/distribusi/riwayat',               [DistribusiScanApiController::class, 'riwayat']);
+    Route::get('/admin/distribusi/{id}',                 [DistribusiScanApiController::class, 'detail']);
+    Route::post('/admin/distribusi/{id}/checkout',        [DistribusiScanApiController::class, 'checkout']);
+    Route::post('/admin/distribusi/{id}/outbound',        [DistribusiScanApiController::class, 'outbound']);
+
+    // Scan Audit / Stock Opname
+    Route::get('/admin/opname/aktif',              [OpnameApiController::class, 'aktif']);
+    Route::post('/admin/opname/mulai',              [OpnameApiController::class, 'mulai']);
+    Route::get('/admin/opname/riwayat',             [OpnameApiController::class, 'riwayat']);
+    Route::get('/admin/opname/barang/{kode_barang}',[OpnameApiController::class, 'cariBarang']);
+    Route::post('/admin/opname/{id}/scan',           [OpnameApiController::class, 'scan']);
+    Route::post('/admin/opname/{id}/selesai',        [OpnameApiController::class, 'selesai']);
+    Route::get('/admin/opname/{id}',                [OpnameApiController::class, 'detail']);
 
 });

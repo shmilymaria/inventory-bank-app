@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ApprovalApiController extends Controller
 {
@@ -131,9 +132,18 @@ class ApprovalApiController extends Controller
                 'tanggal_approval' => now(),
             ]);
 
-            DB::table('permintaan')->where('id', $id)->update([
+            $dataUpdatePermintaan = [
                 'status_permintaan' => $request->keputusan,
-            ]);
+            ];
+
+            // Kalau disetujui, generate QR token unik untuk konfirmasi
+            // Outbound (ditampilkan di HP User, discan Admin saat serah terima).
+            if ($request->keputusan === 'Approved') {
+                $dataUpdatePermintaan['qr_token']         = Str::random(40);
+                $dataUpdatePermintaan['qr_generated_at']  = now();
+            }
+
+            DB::table('permintaan')->where('id', $id)->update($dataUpdatePermintaan);
 
             $pesanMap = [
                 'Approved' => 'Permintaan ' . $permintaan->nomor_permintaan .

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:inventori_bank/constants/app_constants.dart';
 import 'package:inventori_bank/services/api_service.dart';
 
@@ -69,6 +70,14 @@ class _DetailPermintaanPageState extends State<DetailPermintaanPage> {
                           permintaan['status_permintaan'] ?? ''),
 
                     const SizedBox(height: 16),
+
+                    // ── QR Code Serah Terima (hanya saat Approved) ──
+                    if (permintaan != null &&
+                        permintaan['status_permintaan'] == 'Approved' &&
+                        (permintaan['qr_token'] ?? '').toString().isNotEmpty) ...[
+                      _qrCard(permintaan['qr_token'].toString()),
+                      const SizedBox(height: 16),
+                    ],
 
                     // ── Info Permintaan ─────────────────────
                     if (permintaan != null)
@@ -293,6 +302,43 @@ class _DetailPermintaanPageState extends State<DetailPermintaanPage> {
                   approval['catatan_approval'] ?? '-'),
             ],
           ]),
+  );
+
+  // ── QR Code Serah Terima ─────────────────────────────────
+  Widget _qrCard(String qrToken) => Container(
+    width     : double.infinity,
+    padding   : const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(
+          color: const Color(AppConstants.primaryColor).withOpacity(0.3)),
+      boxShadow: [BoxShadow(
+          color: Colors.black.withOpacity(0.05), blurRadius: 8)],
+    ),
+    child: Column(children: [
+      Row(children: [
+        const Icon(Icons.qr_code_2,
+            color: Color(AppConstants.primaryColor), size: 20),
+        const SizedBox(width: 8),
+        const Text('QR Serah Terima Barang',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+      ]),
+      const Divider(height: 20),
+      QrImageView(
+        data            : qrToken,
+        version         : QrVersions.auto,
+        size            : 190,
+        backgroundColor : Colors.white,
+      ),
+      const SizedBox(height: 14),
+      Text(
+        'Tunjukkan QR ini ke Admin saat mengambil barang. '
+        'Admin akan scan QR ini sebagai bukti barang sudah diserahkan.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+      ),
+    ]),
   );
 
   // ── Shared Widgets ───────────────────────────────────────

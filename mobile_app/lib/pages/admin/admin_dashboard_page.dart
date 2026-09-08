@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:inventori_bank/constants/app_constants.dart';
 import 'package:inventori_bank/services/auth_service.dart';
 import 'package:inventori_bank/pages/admin/inbound/scan_inbound_page.dart';
+import 'package:inventori_bank/pages/admin/distribusi/distribusi_list_page.dart';
+import 'package:inventori_bank/pages/admin/opname/opname_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -90,25 +92,28 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                           builder: (_) => const ScanInboundPage())),
                     ),
                     _menuCard(
-                      icon      : Icons.fact_check_outlined,
-                      label     : 'Scan Checkout',
-                      desc      : 'Validasi pengeluaran barang',
-                      color     : Colors.orange,
-                      segeraHadir: true,
+                      icon : Icons.fact_check_outlined,
+                      label: 'Scan Checkout',
+                      desc : 'Validasi pengeluaran barang',
+                      color: Colors.orange,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => const DistribusiListPage())),
                     ),
                     _menuCard(
-                      icon      : Icons.qr_code_scanner,
-                      label     : 'Scan Outbound',
-                      desc      : 'Konfirmasi distribusi ke User',
-                      color     : Colors.blue,
-                      segeraHadir: true,
+                      icon : Icons.qr_code_scanner,
+                      label: 'Scan Outbound',
+                      desc : 'Konfirmasi distribusi ke User',
+                      color: Colors.blue,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => const DistribusiListPage())),
                     ),
                     _menuCard(
-                      icon      : Icons.fact_check,
-                      label     : 'Audit / Opname',
-                      desc      : 'Cocokkan stok fisik vs sistem',
-                      color     : Colors.purple,
-                      segeraHadir: true,
+                      icon : Icons.fact_check,
+                      label: 'Audit / Opname',
+                      desc : 'Cocokkan stok fisik vs sistem',
+                      color: Colors.purple,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => const OpnamePage())),
                     ),
                   ],
                 ),
