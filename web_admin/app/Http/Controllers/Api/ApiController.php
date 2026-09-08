@@ -144,7 +144,32 @@ class ApiController extends Controller
         $user   = $this->authUser($request);
         $roleId = $user->role_id;
 
-        if ($roleId === 2) {
+        if ($roleId === 1) {
+            // Dashboard Admin — ringkasan dari 3 fitur mobile Admin
+            $data = [
+                'total_barang'        => DB::table('barang')->count(),
+                'barang_stok_menipis' => DB::table('barang')
+                    ->where('status_barang', 'Stok Menipis')->count(),
+                'barang_habis'        => DB::table('barang')
+                    ->where('status_barang', 'Habis')->count(),
+                'siap_distribusi'     => DB::table('permintaan')
+                    ->leftJoin('distribusi', 'permintaan.id', '=', 'distribusi.permintaan_id')
+                    ->where('permintaan.status_permintaan', 'Approved')
+                    ->whereNull('distribusi.id')
+                    ->count(),
+                'opname_berlangsung'  => DB::table('stock_opname')
+                    ->where('admin_id', $user->id)
+                    ->where('status_opname', 'Berlangsung')
+                    ->exists(),
+                'inbound_hari_ini'    => DB::table('riwayat_stok')
+                    ->where('jenis_transaksi', 'Masuk')
+                    ->whereDate('created_at', now()->toDateString())
+                    ->count(),
+                'notifikasi_belum_dibaca' => DB::table('notifikasi')
+                    ->where('user_id', $user->id)
+                    ->where('status_baca', 'Belum Dibaca')->count(),
+            ];
+        } elseif ($roleId === 2) {
             // Dashboard Staff
             $data = [
                 'total_permintaan' => DB::table('permintaan')

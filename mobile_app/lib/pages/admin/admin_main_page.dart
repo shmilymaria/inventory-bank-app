@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:inventori_bank/constants/app_constants.dart';
 import 'package:inventori_bank/pages/admin/admin_dashboard_page.dart';
+import 'package:inventori_bank/pages/admin/admin_notifikasi_page.dart';
 import 'package:inventori_bank/pages/admin/admin_profil_page.dart';
 
 /// Shell navigasi untuk role Admin di mobile.
-///
-/// CATATAN: ini versi awal (fase Inbound). Tab "Distribusi" (Checkout +
-/// Outbound) dan "Audit" akan ditambahkan ke _pages & items di bawah pada
-/// fase berikutnya — struktur di sini sudah didesain supaya tinggal
-/// menambah 1 baris di masing-masing tanpa mengubah logic lain.
 class AdminMainPage extends StatefulWidget {
   const AdminMainPage({super.key});
   @override
@@ -19,8 +15,9 @@ class _AdminMainPageState extends State<AdminMainPage> {
   int _idx = 0;
 
   final List<Widget> _pages = const [
-    AdminDashboardPage(), // index 0 — Beranda
-    AdminProfilPage(),    // index 1 — Profil
+    AdminDashboardPage(),   // index 0 — Beranda
+    AdminNotifikasiPage(),  // index 1 — Notifikasi
+    AdminProfilPage(),      // index 2 — Profil
   ];
 
   @override
@@ -42,6 +39,10 @@ class _AdminMainPageState extends State<AdminMainPage> {
               icon      : Icon(Icons.home_outlined),
               activeIcon: Icon(Icons.home),
               label     : 'Beranda'),
+          BottomNavigationBarItem(
+              icon      : Icon(Icons.notifications_outlined),
+              activeIcon: Icon(Icons.notifications),
+              label     : 'Notifikasi'),
           BottomNavigationBarItem(
               icon      : Icon(Icons.person_outline),
               activeIcon: Icon(Icons.person),

@@ -165,6 +165,23 @@ class ApprovalApiController extends Controller
                 'status_baca' => 'Belum Dibaca',
                 'created_at'  => now(),
             ]);
+
+            // Kalau disetujui, kabari semua Admin supaya tahu ada
+            // barang yang siap diproses (Scan Checkout & Outbound).
+            if ($request->keputusan === 'Approved') {
+                $adminIds = DB::table('users')->where('role_id', 1)->pluck('id');
+                foreach ($adminIds as $adminId) {
+                    DB::table('notifikasi')->insert([
+                        'user_id'     => $adminId,
+                        'judul'       => 'Permintaan Siap Didistribusikan',
+                        'pesan'       => 'Permintaan ' . $permintaan->nomor_permintaan .
+                                         ' sudah disetujui Pimpinan dan siap diproses ' .
+                                         '(Scan Checkout & Outbound).',
+                        'status_baca' => 'Belum Dibaca',
+                        'created_at'  => now(),
+                    ]);
+                }
+            }
         });
 
         $pesanSukses = [
