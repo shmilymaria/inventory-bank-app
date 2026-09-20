@@ -177,7 +177,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
 
             const SizedBox(height: 32),
-            const Text('© 2025 PT Bank XYZ',
+            const Text('© 2026 PT Bank XYZ',
                 style: TextStyle(color: Colors.grey, fontSize: 12)),
           ]),
         ),
