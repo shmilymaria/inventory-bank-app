@@ -43,9 +43,12 @@ Route::middleware('auth.api')->group(function () {
 
     // ── Admin (mobile) ──────────────────────────────────────
     // Scan Inbound (Barang Masuk)
+    Route::get('/admin/barang/generate-kode', [InboundApiController::class, 'generateKode']);
     Route::get('/admin/barang/{kode_barang}', [InboundApiController::class, 'cariBarang']);
+    Route::post('/admin/barang',              [InboundApiController::class, 'tambahBarang']);
     Route::post('/admin/inbound',             [InboundApiController::class, 'store']);
     Route::get('/admin/inbound/riwayat',      [InboundApiController::class, 'riwayat']);
+    Route::get('/admin/kategori',             [InboundApiController::class, 'daftarKategori']);
 
     // Scan Checkout + Scan Outbound (Distribusi)
     Route::get('/admin/distribusi/siap',                 [DistribusiScanApiController::class, 'siapDistribusi']);

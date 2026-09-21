@@ -161,4 +161,105 @@ class InboundApiController extends Controller
             'data'    => $riwayat,
         ]);
     }
+
+    // ----------------------------------------------------------------
+    // GET /api/admin/kategori
+    // Daftar kategori untuk dropdown form "Tambah Barang Baru"
+    // ----------------------------------------------------------------
+    public function daftarKategori(Request $request)
+    {
+        if ($blok = $this->pastikanAdmin($request)) return $blok;
+
+        $kategori = DB::table('kategori_barang')
+            ->select('id', 'nama_kategori')
+            ->orderBy('nama_kategori')
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $kategori]);
+    }
+
+    // ----------------------------------------------------------------
+    // GET /api/admin/barang/generate-kode
+    // Generate kode unik (format GEN-0001, GEN-0002, dst) untuk barang
+    // yang belum punya barcode fisik (misal produk keluaran bank sendiri:
+    // formulir, buku cek, dll). Kode ini nanti dirender jadi barcode
+    // Code128 di sisi mobile supaya bisa di-screenshot/print & discan lagi.
+    // ----------------------------------------------------------------
+    public function generateKode(Request $request)
+    {
+        if ($blok = $this->pastikanAdmin($request)) return $blok;
+
+        $terakhir = DB::table('barang')
+            ->where('kode_barang', 'like', 'GEN-%')
+            ->orderByRaw('CAST(SUBSTRING(kode_barang, 5) AS UNSIGNED) desc')
+            ->value('kode_barang');
+
+        $nomorBaru = 1;
+        if ($terakhir) {
+            $angka = (int) substr($terakhir, 4);
+            $nomorBaru = $angka + 1;
+        }
+
+        // Pastikan benar-benar unik (jaga-jaga kalau ada input manual bentrok)
+        do {
+            $kodeBaru = 'GEN-' . str_pad($nomorBaru, 4, '0', STR_PAD_LEFT);
+            $sudahAda = DB::table('barang')->where('kode_barang', $kodeBaru)->exists();
+            $nomorBaru++;
+        } while ($sudahAda);
+
+        return response()->json(['success' => true, 'data' => ['kode_barang' => $kodeBaru]]);
+    }
+
+    // ----------------------------------------------------------------
+    // POST /api/admin/barang
+    // Tambah barang baru langsung dari mobile (dipicu saat scan tidak
+    // ditemukan, atau lewat tombol "+ Tambah Barang Baru" di katalog).
+    // Stok awal selalu 0 — pengisian stok tetap lewat alur tally-scan
+    // Inbound seperti biasa setelah barang ini dibuat.
+    // ----------------------------------------------------------------
+    public function tambahBarang(Request $request)
+    {
+        if ($blok = $this->pastikanAdmin($request)) return $blok;
+
+        $request->validate([
+            'kategori_id'  => 'required|integer|exists:kategori_barang,id',
+            'nama_barang'  => 'required|string|max:150',
+            'kode_barang'  => 'required|string|max:50|unique:barang,kode_barang',
+            'satuan'       => 'required|string|max:20',
+            'stok_minimum' => 'required|integer|min:0',
+            'deskripsi'    => 'nullable|string',
+        ], [
+            'kategori_id.required'  => 'Kategori wajib dipilih.',
+            'nama_barang.required'  => 'Nama barang wajib diisi.',
+            'kode_barang.required'  => 'Kode/barcode barang wajib diisi.',
+            'kode_barang.unique'    => 'Kode/barcode ini sudah terdaftar untuk barang lain.',
+            'satuan.required'       => 'Satuan wajib diisi.',
+            'stok_minimum.required' => 'Stok minimum wajib diisi.',
+        ]);
+
+        $barangId = DB::table('barang')->insertGetId([
+            'kategori_id'        => $request->kategori_id,
+            'kode_barang'        => trim($request->kode_barang),
+            'nama_barang'        => $request->nama_barang,
+            'stok'               => 0,
+            'stok_minimum'       => $request->stok_minimum,
+            'satuan'             => $request->satuan,
+            'deskripsi'          => $request->deskripsi,
+            'status_barang'      => Barang::hitungStatus(0, (int) $request->stok_minimum),
+            'created_at'         => now(),
+            'updated_at'         => now(),
+        ]);
+
+        $barang = DB::table('barang')
+            ->join('kategori_barang', 'barang.kategori_id', '=', 'kategori_barang.id')
+            ->select('barang.*', 'kategori_barang.nama_kategori')
+            ->where('barang.id', $barangId)
+            ->first();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Barang baru berhasil ditambahkan. Silakan lanjut scan untuk mengisi stok.',
+            'data'    => $barang,
+        ]);
+    }
 }
