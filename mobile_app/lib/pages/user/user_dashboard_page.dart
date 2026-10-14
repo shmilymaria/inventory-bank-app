@@ -342,6 +342,7 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   int _statusColor(String s) {
     const m = {
       'Pending'    : 0xFF92400E,
+      'Verified'   : 0xFF155E75,
       'Approved'   : 0xFF065F46,
       'Rejected'   : 0xFF991B1B,
       'Revision'   : 0xFF1E40AF,
@@ -353,6 +354,7 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   int _statusBg(String s) {
     const m = {
       'Pending'    : 0xFFFEF3C7,
+      'Verified'   : 0xFFCFFAFE,
       'Approved'   : 0xFFD1FAE5,
       'Rejected'   : 0xFFFEE2E2,
       'Revision'   : 0xFFDBEAFE,
@@ -364,6 +366,7 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   IconData _statusIcon(String s) {
     const m = {
       'Pending'    : Icons.hourglass_empty,
+      'Verified'   : Icons.verified_outlined,
       'Approved'   : Icons.check_circle_outline,
       'Rejected'   : Icons.cancel_outlined,
       'Revision'   : Icons.refresh,

@@ -43,7 +43,8 @@ class _DetailPermintaanPageState extends State<DetailPermintaanPage> {
 
     final permintaan = _data['permintaan'];
     final items      = _data['detail_items'] as List? ?? [];
-    final approval   = _data['approval'];
+    final riwayat    = _data['riwayat_approval'] as List? ?? [];
+    final statusNow  = permintaan?['status_permintaan']?.toString() ?? '';
 
     return Scaffold(
       backgroundColor: const Color(AppConstants.bgColor),
@@ -90,8 +91,8 @@ class _DetailPermintaanPageState extends State<DetailPermintaanPage> {
 
                     const SizedBox(height: 16),
 
-                    // ── Hasil Approval ──────────────────────
-                    _approvalCard(approval),
+                    // ── Riwayat Keputusan (Admin & Pimpinan) ─
+                    _approvalCard(riwayat, statusNow),
 
                     const SizedBox(height: 20),
                   ],
@@ -241,68 +242,110 @@ class _DetailPermintaanPageState extends State<DetailPermintaanPage> {
           ),
   );
 
-  // ── Hasil Approval ───────────────────────────────────────
-  Widget _approvalCard(dynamic approval) => _card(
-    title: 'Hasil Approval',
-    icon : Icons.verified_outlined,
-    child: approval == null
-        ? const Row(children: [
-            Icon(Icons.hourglass_empty,
-                color: Colors.orange, size: 20),
-            SizedBox(width: 10),
-            Text('Menunggu keputusan Pimpinan.',
-                style: TextStyle(color: Colors.grey)),
-          ])
-        : Column(children: [
+  // ── Riwayat Keputusan (tahap Admin & Pimpinan) ───────────
+  Widget _approvalCard(List riwayat, String status) {
+    final dikembalikan = status == 'Rejected' || status == 'Revision';
 
-            // Keputusan
-            Row(children: [
-              Container(
-                padding   : const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _keputusanBg(
-                      approval['keputusan'] ?? ''),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  _keputusanIcon(approval['keputusan'] ?? ''),
-                  color: _keputusanColor(
-                      approval['keputusan'] ?? ''),
-                  size: 20,
-                ),
+    return _card(
+      title: 'Riwayat Keputusan',
+      icon : Icons.verified_outlined,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+        if (riwayat.isEmpty)
+          Row(children: [
+            const Icon(Icons.hourglass_empty, color: Colors.orange, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                status == 'Pending'
+                    ? 'Menunggu verifikasi Admin.'
+                    : 'Menunggu keputusan.',
+                style: const TextStyle(color: Colors.grey),
               ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(approval['keputusan'] ?? '',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize  : 15,
-                          color     : _keputusanColor(
-                              approval['keputusan'] ?? ''))),
-                  Text('oleh ${approval['nama_pimpinan'] ?? '-'}',
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.grey)),
-                ],
+            ),
+          ]),
+
+        ...List.generate(riwayat.length, (i) {
+          final a      = riwayat[i];
+          final k      = (a['keputusan'] ?? '').toString();
+          final tahap  = (a['tahap'] ?? 'Pimpinan').toString();
+          final catat  = (a['catatan_approval'] ?? '').toString();
+
+          return Container(
+            margin : EdgeInsets.only(bottom: i == riwayat.length - 1 ? 0 : 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _keputusanBg(k),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(_keputusanIcon(k), color: _keputusanColor(k), size: 20),
+                const SizedBox(width: 8),
+                Text(k, style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 14,
+                    color: _keputusanColor(k))),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text('Tahap $tahap',
+                      style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              Text('oleh ${a['nama_pimpinan'] ?? '-'} · '
+                  '${_formatDate(a['tanggal_approval'] ?? '')}',
+                  style: const TextStyle(fontSize: 11.5, color: Colors.black54)),
+              if (catat.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text('Catatan: $catat', style: const TextStyle(fontSize: 12.5)),
+              ],
+            ]),
+          );
+        }),
+
+        if (status == 'Verified') ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            const Icon(Icons.hourglass_empty, color: Colors.orange, size: 18),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('Menunggu keputusan Pimpinan.',
+                  style: TextStyle(color: Colors.grey, fontSize: 12.5)),
+            ),
+          ]),
+        ],
+
+        if (dikembalikan) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.orange.shade200),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.info_outline, color: Colors.orange.shade800, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Permintaan ini dikembalikan kepada Anda. Silakan ajukan '
+                  'permintaan ulang lewat menu Ajukan dengan menyesuaikan '
+                  'catatan di atas.',
+                  style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                ),
               ),
             ]),
-
-            const SizedBox(height: 12),
-
-            _infoRow('Tanggal Approval',
-                _formatDate(
-                    approval['tanggal_approval'] ?? '')),
-
-            if ((approval['catatan_approval'] ?? '')
-                .toString()
-                .isNotEmpty) ...[
-              _divider(),
-              _infoRow('Catatan',
-                  approval['catatan_approval'] ?? '-'),
-            ],
-          ]),
-  );
+          ),
+        ],
+      ]),
+    );
+  }
 
   // ── QR Code Serah Terima ─────────────────────────────────
   Widget _qrCard(String qrToken) => Container(
@@ -424,6 +467,7 @@ class _DetailPermintaanPageState extends State<DetailPermintaanPage> {
   int _statusColor(String s) {
     const m = {
       'Pending'    : 0xFF92400E,
+      'Verified'   : 0xFF155E75,
       'Approved'   : 0xFF065F46,
       'Rejected'   : 0xFF991B1B,
       'Revision'   : 0xFF1E40AF,
@@ -435,6 +479,7 @@ class _DetailPermintaanPageState extends State<DetailPermintaanPage> {
   int _statusBg(String s) {
     const m = {
       'Pending'    : 0xFFFEF3C7,
+      'Verified'   : 0xFFCFFAFE,
       'Approved'   : 0xFFD1FAE5,
       'Rejected'   : 0xFFFEE2E2,
       'Revision'   : 0xFFDBEAFE,
@@ -446,6 +491,7 @@ class _DetailPermintaanPageState extends State<DetailPermintaanPage> {
   IconData _statusIcon(String s) {
     const m = {
       'Pending'    : Icons.hourglass_empty,
+      'Verified'   : Icons.verified_outlined,
       'Approved'   : Icons.check_circle_outline,
       'Rejected'   : Icons.cancel_outlined,
       'Revision'   : Icons.refresh,
@@ -456,7 +502,8 @@ class _DetailPermintaanPageState extends State<DetailPermintaanPage> {
 
   String _statusLabel(String s) {
     const m = {
-      'Pending'    : 'Menunggu Persetujuan',
+      'Pending'    : 'Menunggu Verifikasi Admin',
+      'Verified'   : 'Menunggu Persetujuan Pimpinan',
       'Approved'   : 'Disetujui',
       'Rejected'   : 'Ditolak',
       'Revision'   : 'Perlu Revisi',

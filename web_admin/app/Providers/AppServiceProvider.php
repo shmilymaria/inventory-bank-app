@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -20,8 +20,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Gunakan Bootstrap 5 untuk tampilan pagination
-        // agar sesuai dengan layout web admin yang memakai Bootstrap 5.3.7
+        // UI web admin memakai Bootstrap, jadi paginasi harus pakai view
+        // Bootstrap (bukan Tailwind bawaan Laravel yang bikin ikon panah
+        // < > tampil raksasa).
         Paginator::useBootstrapFive();
     }
 }

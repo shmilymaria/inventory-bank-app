@@ -16,7 +16,7 @@
 {{-- ── Statistik ── --}}
 <div class="row g-3 mb-4">
 
-    <div class="col-md-2">
+    <div class="col-6 col">
         <div class="card card-stat h-100">
             <div class="card-body text-center py-3">
                 <div class="fw-bold fs-3">{{ $stats['total'] }}</div>
@@ -25,7 +25,7 @@
         </div>
     </div>
 
-    <div class="col-md-2">
+    <div class="col-6 col">
         <div class="card card-stat h-100" style="border-left:4px solid #f59e0b;">
             <div class="card-body text-center py-3">
                 <div class="fw-bold fs-3 text-warning">{{ $stats['pending'] }}</div>
@@ -34,7 +34,16 @@
         </div>
     </div>
 
-    <div class="col-md-2">
+    <div class="col-6 col">
+        <div class="card card-stat h-100" style="border-left:4px solid #0891b2;">
+            <div class="card-body text-center py-3">
+                <div class="fw-bold fs-3" style="color:#0891b2;">{{ $stats['verified'] }}</div>
+                <div class="text-muted small" title="Sudah diverifikasi Admin, menunggu disposisi Pimpinan">Verified</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col">
         <div class="card card-stat h-100" style="border-left:4px solid #10b981;">
             <div class="card-body text-center py-3">
                 <div class="fw-bold fs-3 text-success">{{ $stats['approved'] }}</div>
@@ -43,7 +52,7 @@
         </div>
     </div>
 
-    <div class="col-md-2">
+    <div class="col-6 col">
         <div class="card card-stat h-100" style="border-left:4px solid #ef4444;">
             <div class="card-body text-center py-3">
                 <div class="fw-bold fs-3 text-danger">{{ $stats['rejected'] }}</div>
@@ -52,7 +61,7 @@
         </div>
     </div>
 
-    <div class="col-md-2">
+    <div class="col-6 col">
         <div class="card card-stat h-100" style="border-left:4px solid #3b82f6;">
             <div class="card-body text-center py-3">
                 <div class="fw-bold fs-3" style="color:#3b82f6;">{{ $stats['revision'] }}</div>
@@ -61,7 +70,7 @@
         </div>
     </div>
 
-    <div class="col-md-2">
+    <div class="col-6 col">
         <div class="card card-stat h-100" style="border-left:4px solid #1565C0;">
             <div class="card-body text-center py-3">
                 <div class="fw-bold fs-3" style="color:#1565C0;">{{ $stats['distributed'] }}</div>
@@ -91,9 +100,16 @@
                 <label class="form-label small text-muted mb-1">Status</label>
                 <select name="status" class="form-select">
                     <option value="">Semua Status</option>
-                    @foreach(['Pending','Approved','Rejected','Revision','Distributed'] as $s)
+                    @foreach([
+                        'Pending'     => 'Pending (Menunggu Admin)',
+                        'Verified'    => 'Verified (Menunggu Pimpinan)',
+                        'Approved'    => 'Approved',
+                        'Rejected'    => 'Rejected',
+                        'Revision'    => 'Revision',
+                        'Distributed' => 'Distributed',
+                    ] as $s => $labelStatus)
                         <option value="{{ $s }}" {{ request('status') == $s ? 'selected' : '' }}>
-                            {{ $s }}
+                            {{ $labelStatus }}
                         </option>
                     @endforeach
                 </select>
@@ -202,6 +218,7 @@
                                 @php
                                     $statusConfig = [
                                         'Pending'     => ['bg' => '#fef3c7', 'color' => '#92400e',  'icon' => 'bi-hourglass-split'],
+                                        'Verified'    => ['bg' => '#cffafe', 'color' => '#155e75',  'icon' => 'bi-patch-check'],
                                         'Approved'    => ['bg' => '#d1fae5', 'color' => '#065f46',  'icon' => 'bi-check-circle'],
                                         'Rejected'    => ['bg' => '#fee2e2', 'color' => '#991b1b',  'icon' => 'bi-x-circle'],
                                         'Revision'    => ['bg' => '#dbeafe', 'color' => '#1e40af',  'icon' => 'bi-arrow-repeat'],

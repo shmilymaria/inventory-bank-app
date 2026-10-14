@@ -84,6 +84,7 @@ class InboundApiController extends Controller
             'kode_barang' => 'required|string|exists:barang,kode_barang',
             'jumlah'      => 'required|integer|min:1',
             'keterangan'  => 'nullable|string|max:255',
+            'input_manual'=> 'nullable|boolean', // true = jumlah diketik manual hasil hitung fisik
         ], [
             'kode_barang.required' => 'Kode barang wajib diisi.',
             'kode_barang.exists'   => 'Barang tidak ditemukan.',
@@ -115,7 +116,9 @@ class InboundApiController extends Controller
                 'stok_sebelum'    => $stokSebelum,
                 'stok_sesudah'    => $stokSesudah,
                 'keterangan'      => $request->keterangan
-                    ?: 'Stok masuk (scan barcode oleh ' . $admin->nama_lengkap . ')',
+                    ?: ($request->boolean('input_manual')
+                        ? 'Stok masuk (jumlah diinput manual hasil hitung fisik oleh '
+                        : 'Stok masuk (scan barcode oleh ') . $admin->nama_lengkap . ')',
                 'created_at'      => now(),
             ]);
         });

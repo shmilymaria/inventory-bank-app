@@ -327,7 +327,7 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
                         .toString()
                         .isNotEmpty) ...[
                       const SizedBox(height: 4),
-                      Text('oleh ${a['nama_pimpinan']}',
+                      Text('Tahap ${a['tahap'] ?? 'Pimpinan'} · oleh ${a['nama_pimpinan']}',
                           style: const TextStyle(
                               fontSize: 12, color: Colors.grey)),
                     ],
@@ -446,6 +446,7 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
   int _statusColor(String s) {
     const m = {
       'Pending'    : 0xFF92400E,
+      'Verified'   : 0xFF155E75,
       'Approved'   : 0xFF065F46,
       'Rejected'   : 0xFF991B1B,
       'Revision'   : 0xFF1E40AF,
@@ -457,6 +458,7 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
   int _statusBg(String s) {
     const m = {
       'Pending'    : 0xFFFEF3C7,
+      'Verified'   : 0xFFCFFAFE,
       'Approved'   : 0xFFD1FAE5,
       'Rejected'   : 0xFFFEE2E2,
       'Revision'   : 0xFFDBEAFE,
@@ -468,6 +470,7 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
   IconData _statusIcon(String s) {
     const m = {
       'Pending'    : Icons.hourglass_empty,
+      'Verified'   : Icons.verified_outlined,
       'Approved'   : Icons.check_circle_outline,
       'Rejected'   : Icons.cancel_outlined,
       'Revision'   : Icons.refresh,
@@ -478,7 +481,8 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
 
   String _statusLabel(String s) {
     const m = {
-      'Pending'    : 'Menunggu Persetujuan',
+      'Pending'    : 'Menunggu Verifikasi Admin',
+      'Verified'   : 'Menunggu Persetujuan Pimpinan',
       'Approved'   : 'Disetujui',
       'Rejected'   : 'Ditolak',
       'Revision'   : 'Perlu Revisi',

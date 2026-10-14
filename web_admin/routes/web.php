@@ -37,6 +37,8 @@ Route::middleware('auth.admin')->group(function () {
          ->name('permintaan.index');
     Route::get('/permintaan/{id}', [PermintaanController::class, 'show'])
          ->name('permintaan.show');
+    Route::post('/permintaan/{id}/verifikasi', [PermintaanController::class, 'verifikasi'])
+         ->name('permintaan.verifikasi');
 
     // Distribusi
     Route::get('/distribusi', [DistribusiController::class, 'index'])

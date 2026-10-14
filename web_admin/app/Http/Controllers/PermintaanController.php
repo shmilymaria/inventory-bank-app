@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\VerifikasiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -55,6 +56,7 @@ class PermintaanController extends Controller
         $stats = [
             'total'       => DB::table('permintaan')->count(),
             'pending'     => DB::table('permintaan')->where('status_permintaan', 'Pending')->count(),
+            'verified'    => DB::table('permintaan')->where('status_permintaan', 'Verified')->count(),
             'approved'    => DB::table('permintaan')->where('status_permintaan', 'Approved')->count(),
             'rejected'    => DB::table('permintaan')->where('status_permintaan', 'Rejected')->count(),
             'revision'    => DB::table('permintaan')->where('status_permintaan', 'Revision')->count(),
@@ -114,8 +116,53 @@ class PermintaanController extends Controller
             ->where('distribusi.permintaan_id', $id)
             ->first();
 
+        // Seluruh riwayat keputusan (tahap Admin & Pimpinan), terbaru di atas
+        $riwayatApproval = DB::table('approval')
+            ->join('users', 'approval.pimpinan_id', '=', 'users.id')
+            ->select(
+                'approval.*',
+                'users.nama_lengkap as nama_pengambil',
+                'users.jabatan as jabatan_pengambil'
+            )
+            ->where('approval.permintaan_id', $id)
+            ->orderBy('approval.tanggal_approval', 'desc')
+            ->get();
+
         return view('permintaan.show', compact(
-            'permintaan', 'detailItems', 'approval', 'distribusi'
+            'permintaan', 'detailItems', 'approval', 'distribusi', 'riwayatApproval'
         ));
+    }
+
+    // ----------------------------------------------------------------
+    // VERIFIKASI — Tahap 1 approval oleh Admin (bagian umum)
+    //   Approved → diteruskan ke Pimpinan (status Verified)
+    //   Rejected / Revision → dikembalikan ke User
+    // ----------------------------------------------------------------
+    public function verifikasi(Request $request, int $id)
+    {
+        $request->validate([
+            'keputusan'        => 'required|in:Approved,Rejected,Revision',
+            'catatan_approval' => 'nullable|string|max:500',
+        ], [
+            'keputusan.required' => 'Pilih keputusan terlebih dahulu.',
+            'keputusan.in'       => 'Keputusan tidak valid.',
+        ]);
+
+        $admin = DB::table('users')
+            ->where('id', session('user_id'))
+            ->where('role_id', 1)
+            ->first();
+
+        if (!$admin) {
+            return redirect()->route('permintaan.show', $id)
+                ->with('error', 'Sesi Admin tidak valid. Silakan login ulang.');
+        }
+
+        $hasil = VerifikasiService::proses(
+            $id, $admin, $request->keputusan, $request->catatan_approval
+        );
+
+        return redirect()->route('permintaan.show', $id)
+            ->with($hasil['ok'] ? 'success' : 'error', $hasil['message']);
     }
 }

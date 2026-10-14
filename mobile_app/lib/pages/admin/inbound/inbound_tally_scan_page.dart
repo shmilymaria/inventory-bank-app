@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:inventori_bank/constants/app_constants.dart';
 import 'package:inventori_bank/services/api_service.dart';
 import 'package:inventori_bank/widgets/barcode_scanner_page.dart';
@@ -16,7 +17,8 @@ class _InboundTallyScanPageState extends State<InboundTallyScanPage> {
   int    _tally      = 0;
   bool   _mengecek   = false;
   bool   _mengirim   = false;
-  final List<String> _logWaktu = []; // jam tiap scan sukses, untuk ditampilkan
+  bool   _inputManual = false;       // true bila Admin pernah mengetik jumlah manual
+  final List<String> _log = [];      // log aktivitas sesi ini (scan & input manual)
 
   final TextEditingController _keteranganCtrl = TextEditingController();
 
@@ -43,7 +45,8 @@ class _InboundTallyScanPageState extends State<InboundTallyScanPage> {
       // Cocok — tambah tally
       setState(() {
         _tally++;
-        _logWaktu.insert(0, TimeOfDay.now().format(context));
+        _log.insert(0,
+            'Scan +1 → total $_tally unit — ${TimeOfDay.now().format(context)}');
       });
       return;
     }
@@ -117,17 +120,123 @@ class _InboundTallyScanPageState extends State<InboundTallyScanPage> {
     }
   }
 
+  // Ketuk angka tally → input jumlah TOTAL secara manual (hasil hitung fisik)
+  Future<void> _inputJumlahManual() async {
+    final satuan = widget.barang['satuan']?.toString() ?? '';
+    final ctrl   = TextEditingController(text: _tally > 0 ? '$_tally' : '');
+    ctrl.selection =
+        TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+    String? error;
+
+    final hasil = await showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: const Text('Input Jumlah Manual'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Masukkan jumlah TOTAL "$_namaBarangDipilih" yang masuk, '
+                'sesuai hasil hitung manual. Angka ini akan menggantikan '
+                'hitungan saat ini ($_tally).',
+                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller   : ctrl,
+                autofocus    : true,
+                keyboardType : TextInputType.number, // keyboard numerik
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                maxLength    : 7,
+                decoration   : InputDecoration(
+                  labelText : 'Jumlah total',
+                  suffixText: satuan,
+                  errorText : error,
+                  border    : const OutlineInputBorder(),
+                ),
+                onSubmitted: (_) {
+                  final v = int.tryParse(ctrl.text.trim());
+                  if (v == null) {
+                    setDialog(() => error = 'Masukkan angka yang valid.');
+                  } else {
+                    Navigator.pop(ctx, v);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child    : const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final v = int.tryParse(ctrl.text.trim());
+                if (v == null) {
+                  setDialog(() => error = 'Masukkan angka yang valid.');
+                  return;
+                }
+                Navigator.pop(ctx, v);
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (hasil == null) return;
+
+    setState(() {
+      _tally       = hasil;
+      _inputManual = true;
+      _log.insert(0,
+          'Input manual → total $hasil unit — ${TimeOfDay.now().format(context)}');
+    });
+  }
+
   Future<void> _selesai() async {
     if (_tally <= 0) {
-      _snack('Scan minimal 1 barang dulu sebelum menyimpan.', isError: true);
+      _snack('Scan atau input minimal 1 unit dulu sebelum menyimpan.',
+          isError: true);
       return;
     }
+
+    // Konfirmasi dulu — salah ketik jumlah lebih mudah terjadi di input manual
+    final stokSekarang = int.tryParse(widget.barang['stok'].toString()) ?? 0;
+    final satuan       = widget.barang['satuan']?.toString() ?? '';
+    final yakin = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title  : const Text('Simpan Stok Masuk?'),
+        content: Text(
+          'Tambah $_tally $satuan ke "$_namaBarangDipilih".\n\n'
+          'Stok saat ini: $stokSekarang $satuan\n'
+          'Stok setelah disimpan: ${stokSekarang + _tally} $satuan',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child    : const Text('Periksa Lagi'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child    : const Text('Ya, Simpan'),
+          ),
+        ],
+      ),
+    );
+    if (yakin != true) return;
 
     setState(() => _mengirim = true);
     final res = await ApiService.post('/admin/inbound', {
       'kode_barang': _kodeBarangDipilih,
       'jumlah'     : _tally,
       'keterangan' : _keteranganCtrl.text.trim(),
+      'input_manual': _inputManual,
     });
     setState(() => _mengirim = false);
 
@@ -210,21 +319,36 @@ class _InboundTallyScanPageState extends State<InboundTallyScanPage> {
           const SizedBox(height: 20),
 
           // ── Tally counter besar ─────────────────────────
-          Container(
-            width  : double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 28),
-            decoration: BoxDecoration(
-              color: primary.withOpacity(0.06),
+          Material(
+            color: primary.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: primary.withOpacity(0.2)),
+              onTap: _inputJumlahManual, // ketuk angka → input jumlah manual
+              child: Container(
+                width  : double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: primary.withOpacity(0.2)),
+                ),
+                child: Column(children: [
+                  Text('$_tally',
+                      style: const TextStyle(
+                          fontSize: 56, fontWeight: FontWeight.bold, color: primary)),
+                  Text(_inputManual ? 'unit (termasuk input manual)' : 'unit ter-scan',
+                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                  const SizedBox(height: 10),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.edit_outlined, size: 14, color: primary.withOpacity(0.8)),
+                    const SizedBox(width: 5),
+                    Text('Ketuk angka untuk input jumlah manual',
+                        style: TextStyle(
+                            fontSize: 11.5, color: primary.withOpacity(0.8))),
+                  ]),
+                ]),
+              ),
             ),
-            child: Column(children: [
-              Text('$_tally',
-                  style: const TextStyle(
-                      fontSize: 56, fontWeight: FontWeight.bold, color: primary)),
-              Text('unit ter-scan',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-            ]),
           ),
 
           const SizedBox(height: 20),
@@ -267,18 +391,27 @@ class _InboundTallyScanPageState extends State<InboundTallyScanPage> {
             ),
           ),
 
-          if (_logWaktu.isNotEmpty) ...[
+          if (_log.isNotEmpty) ...[
             const SizedBox(height: 20),
-            const Text('Log Scan Sesi Ini',
+            const Text('Log Aktivitas Sesi Ini',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 8),
-            ...List.generate(_logWaktu.length, (i) => Padding(
+            ..._log.map((l) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(children: [
-                Icon(Icons.check_circle, size: 15, color: Colors.green.shade600),
+                Icon(
+                  l.startsWith('Input manual')
+                      ? Icons.edit_note
+                      : Icons.check_circle,
+                  size : 15,
+                  color: l.startsWith('Input manual')
+                      ? Colors.blue.shade600
+                      : Colors.green.shade600,
+                ),
                 const SizedBox(width: 8),
-                Text('Unit #${_logWaktu.length - i} — ${_logWaktu[i]}',
-                    style: const TextStyle(fontSize: 12.5)),
+                Expanded(
+                  child: Text(l, style: const TextStyle(fontSize: 12.5)),
+                ),
               ]),
             )),
           ],

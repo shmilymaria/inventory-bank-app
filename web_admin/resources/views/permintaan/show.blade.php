@@ -14,86 +14,77 @@
     </ol>
 </nav>
 
-{{-- ── Timeline Status ── --}}
+{{-- ── Timeline Status (4 tahap: Diajukan → Verifikasi Admin → Disposisi Pimpinan → Distribusi) ── --}}
 @php
-    $allStatus  = ['Pending', 'Approved', 'Distributed'];
     $statusNow  = $permintaan->status_permintaan;
-    $isRejected = $statusNow === 'Rejected';
-    $isRevision = $statusNow === 'Revision';
+    $isReturned = in_array($statusNow, ['Rejected', 'Revision']);
 
-    $stepDone = match($statusNow) {
-        'Pending'     => 1,
-        'Approved'    => 2,
-        'Revision'    => 2,
-        'Rejected'    => 2,
-        'Distributed' => 3,
-        default       => 1,
+    // Pada tahap mana permintaan dikembalikan? (Admin / Pimpinan)
+    $tahapKembali = null;
+    if ($isReturned) {
+        $rowKembali   = $riwayatApproval->first(fn($r) => in_array($r->keputusan, ['Rejected', 'Revision']));
+        $tahapKembali = $rowKembali->tahap ?? 'Pimpinan';
+    }
+    $stateKembali = $statusNow === 'Rejected' ? 'rejected' : 'revision';
+
+    $stepAdmin = match(true) {
+        $statusNow === 'Pending'                    => 'current',
+        $isReturned && $tahapKembali === 'Admin'    => $stateKembali,
+        default                                     => 'done',
     };
+    $stepPimpinan = match(true) {
+        $statusNow === 'Pending'                    => 'pending',
+        $statusNow === 'Verified'                   => 'current',
+        $isReturned && $tahapKembali === 'Admin'    => 'pending',
+        $isReturned && $tahapKembali === 'Pimpinan' => $stateKembali,
+        default                                     => 'done',
+    };
+    $stepDistribusi = match($statusNow) {
+        'Distributed' => 'done',
+        'Approved'    => 'current',
+        default       => 'pending',
+    };
+
+    $subText = [
+        'done' => 'Selesai', 'current' => 'Menunggu', 'pending' => '—',
+        'rejected' => 'Rejected', 'revision' => 'Revision',
+    ];
+    $stateColor = [
+        'done' => '#1565C0', 'current' => '#f59e0b', 'pending' => '#e2e8f0',
+        'rejected' => '#ef4444', 'revision' => '#3b82f6',
+    ];
+
+    $steps = [
+        ['label' => 'Diajukan',           'icon' => 'bi-file-earmark-text', 'state' => 'done',          'sub' => 'Pending'],
+        ['label' => 'Verifikasi Admin',   'icon' => 'bi-person-check',      'state' => $stepAdmin,      'sub' => $subText[$stepAdmin]],
+        ['label' => 'Disposisi Pimpinan', 'icon' => 'bi-patch-check',       'state' => $stepPimpinan,   'sub' => $subText[$stepPimpinan]],
+        ['label' => 'Distribusi',         'icon' => 'bi-truck',             'state' => $stepDistribusi, 'sub' => $subText[$stepDistribusi]],
+    ];
+    $stateIcon = ['rejected' => 'bi-x-lg', 'revision' => 'bi-arrow-repeat'];
 @endphp
 
 <div class="card mb-4">
     <div class="card-body py-3">
-        <div class="d-flex align-items-center justify-content-center gap-0">
+        <div class="d-flex align-items-center justify-content-center gap-0 flex-wrap">
+            @foreach($steps as $i => $st)
+                @php $warna = $stateColor[$st['state']]; $aktif = $st['state'] !== 'pending'; @endphp
 
-            {{-- Step 1: Pending --}}
-            <div class="text-center" style="min-width:120px;">
-                <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold mb-1"
-                     style="width:42px;height:42px;
-                            background:{{ $stepDone >= 1 ? '#1565C0' : '#e2e8f0' }};
-                            color:{{ $stepDone >= 1 ? '#fff' : '#94a3b8' }};">
-                    <i class="bi bi-file-earmark-text"></i>
+                <div class="text-center" style="min-width:120px;">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold mb-1"
+                         style="width:42px;height:42px;background:{{ $warna }};color:{{ $aktif ? '#fff' : '#94a3b8' }};">
+                        <i class="bi {{ $stateIcon[$st['state']] ?? $st['icon'] }}"></i>
+                    </div>
+                    <div class="small fw-semibold" style="color:{{ $aktif ? $warna : '#94a3b8' }};">
+                        {{ $st['label'] }}
+                    </div>
+                    <div class="text-muted" style="font-size:0.7rem;">{{ $st['sub'] }}</div>
                 </div>
-                <div class="small fw-semibold" style="color:{{ $stepDone >= 1 ? '#1565C0' : '#94a3b8' }};">
-                    Diajukan
-                </div>
-                <div class="text-muted" style="font-size:0.7rem;">Pending</div>
-            </div>
 
-            {{-- Garis 1 --}}
-            <div class="flex-grow-1 mx-2" style="height:3px;background:{{ $stepDone >= 2 ? '#1565C0' : '#e2e8f0' }};max-width:100px;"></div>
-
-            {{-- Step 2: Approval --}}
-            <div class="text-center" style="min-width:120px;">
-                <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold mb-1"
-                     style="width:42px;height:42px;
-                            background:{{ $stepDone >= 2 ? ($isRejected ? '#ef4444' : ($isRevision ? '#3b82f6' : '#1565C0')) : '#e2e8f0' }};
-                            color:{{ $stepDone >= 2 ? '#fff' : '#94a3b8' }};">
-                    @if($isRejected)
-                        <i class="bi bi-x-lg"></i>
-                    @elseif($isRevision)
-                        <i class="bi bi-arrow-repeat"></i>
-                    @else
-                        <i class="bi bi-check2"></i>
-                    @endif
-                </div>
-                <div class="small fw-semibold"
-                     style="color:{{ $stepDone >= 2 ? ($isRejected ? '#ef4444' : ($isRevision ? '#3b82f6' : '#1565C0')) : '#94a3b8' }};">
-                    Approval
-                </div>
-                <div class="text-muted" style="font-size:0.7rem;">
-                    {{ $isRejected ? 'Rejected' : ($isRevision ? 'Revision' : ($stepDone >= 2 ? 'Approved' : 'Menunggu')) }}
-                </div>
-            </div>
-
-            {{-- Garis 2 --}}
-            <div class="flex-grow-1 mx-2" style="height:3px;background:{{ $stepDone >= 3 ? '#1565C0' : '#e2e8f0' }};max-width:100px;"></div>
-
-            {{-- Step 3: Distribusi --}}
-            <div class="text-center" style="min-width:120px;">
-                <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold mb-1"
-                     style="width:42px;height:42px;
-                            background:{{ $stepDone >= 3 ? '#1565C0' : '#e2e8f0' }};
-                            color:{{ $stepDone >= 3 ? '#fff' : '#94a3b8' }};">
-                    <i class="bi bi-truck"></i>
-                </div>
-                <div class="small fw-semibold" style="color:{{ $stepDone >= 3 ? '#1565C0' : '#94a3b8' }};">
-                    Distribusi
-                </div>
-                <div class="text-muted" style="font-size:0.7rem;">
-                    {{ $stepDone >= 3 ? 'Selesai' : 'Menunggu' }}
-                </div>
-            </div>
-
+                @if(!$loop->last)
+                    <div class="flex-grow-1 mx-2"
+                         style="height:3px;max-width:80px;background:{{ $st['state'] === 'done' ? '#1565C0' : '#e2e8f0' }};"></div>
+                @endif
+            @endforeach
         </div>
     </div>
 </div>
@@ -122,6 +113,7 @@
                     @php
                         $statusConfig = [
                             'Pending'     => ['bg' => '#fef3c7', 'color' => '#92400e',  'icon' => 'bi-hourglass-split'],
+                            'Verified'    => ['bg' => '#cffafe', 'color' => '#155e75',  'icon' => 'bi-patch-check'],
                             'Approved'    => ['bg' => '#d1fae5', 'color' => '#065f46',  'icon' => 'bi-check-circle'],
                             'Rejected'    => ['bg' => '#fee2e2', 'color' => '#991b1b',  'icon' => 'bi-x-circle'],
                             'Revision'    => ['bg' => '#dbeafe', 'color' => '#1e40af',  'icon' => 'bi-arrow-repeat'],
@@ -271,60 +263,133 @@
             </div>
         </div>
 
-        {{-- Hasil Approval --}}
-        <div class="card mb-4">
-            <div class="card-header py-3" style="background:#1565C0;">
+        {{-- Form Verifikasi Admin (hanya saat status Pending) --}}
+        @if($permintaan->status_permintaan == 'Pending')
+        <div class="card mb-4" style="border:2px solid #f59e0b;">
+            <div class="card-header py-3" style="background:#f59e0b;">
                 <h5 class="mb-0 text-white fw-semibold">
-                    <i class="bi bi-check2-all me-2"></i>Hasil Approval
+                    <i class="bi bi-person-check me-2"></i>Verifikasi Admin
                 </h5>
             </div>
             <div class="card-body p-4">
-                @if($approval)
-                    <div class="d-flex align-items-center gap-2 mb-3">
-                        @php
-                            $apvCfg = [
-                                'Approved' => ['bg' => '#d1fae5', 'color' => '#065f46', 'icon' => 'bi-check-circle-fill'],
-                                'Rejected' => ['bg' => '#fee2e2', 'color' => '#991b1b', 'icon' => 'bi-x-circle-fill'],
-                                'Revision' => ['bg' => '#dbeafe', 'color' => '#1e40af', 'icon' => 'bi-arrow-repeat'],
-                            ][$approval->keputusan] ?? ['bg' => '#f1f5f9', 'color' => '#64748b', 'icon' => 'bi-circle'];
-                        @endphp
-                        <div class="rounded-circle d-flex align-items-center justify-content-center"
-                             style="width:42px;height:42px;background:{{ $apvCfg['bg'] }};flex-shrink:0;">
+                <p class="small text-muted mb-3">
+                    Periksa permintaan ini terlebih dahulu. Jika <strong>Approved</strong>, permintaan
+                    diteruskan ke Pimpinan untuk disposisi. Jika <strong>Rejected</strong> /
+                    <strong>Revision</strong>, permintaan dikembalikan ke User beserta catatan Anda.
+                </p>
+
+                <form method="POST" action="{{ route('permintaan.verifikasi', $permintaan->id) }}"
+                      onsubmit="return konfirmasiVerifikasi(this);">
+                    @csrf
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Keputusan <span class="text-danger">*</span></label>
+                        <div class="d-flex gap-2 flex-wrap">
+                            @foreach([
+                                'Approved' => ['Approved (Teruskan ke Pimpinan)', 'success'],
+                                'Revision' => ['Revision (Minta Revisi)',         'primary'],
+                                'Rejected' => ['Rejected (Tolak)',                'danger'],
+                            ] as $val => [$lbl, $clr])
+                                <input type="radio" class="btn-check" name="keputusan"
+                                       id="kep_{{ $val }}" value="{{ $val }}"
+                                       {{ old('keputusan') == $val ? 'checked' : '' }} required>
+                                <label class="btn btn-outline-{{ $clr }} btn-sm" for="kep_{{ $val }}">{{ $lbl }}</label>
+                            @endforeach
+                        </div>
+                        @error('keputusan') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">
+                            Catatan <span class="text-muted fw-normal">(wajib untuk Rejected / Revision)</span>
+                        </label>
+                        <textarea name="catatan_approval" rows="3" maxlength="500"
+                                  class="form-control @error('catatan_approval') is-invalid @enderror"
+                                  placeholder="Tulis alasan / hal yang perlu diperbaiki User...">{{ old('catatan_approval') }}</textarea>
+                        @error('catatan_approval') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+
+                    <button type="submit" class="btn btn-warning fw-semibold">
+                        <i class="bi bi-send-check me-1"></i> Simpan Keputusan
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            function konfirmasiVerifikasi(form) {
+                const k = form.querySelector('input[name=keputusan]:checked');
+                if (!k) return true; // biar validasi 'required' browser yang menangani
+                const catatan = form.querySelector('textarea[name=catatan_approval]').value.trim();
+                if (k.value !== 'Approved' && catatan === '') {
+                    alert('Catatan wajib diisi untuk keputusan Rejected / Revision.');
+                    return false;
+                }
+                const teks = {
+                    Approved: 'Teruskan permintaan ini ke Pimpinan?',
+                    Rejected: 'Tolak permintaan ini dan kembalikan ke User?',
+                    Revision: 'Kembalikan permintaan ini ke User untuk direvisi?',
+                }[k.value];
+                return confirm(teks);
+            }
+        </script>
+        @endif
+
+        {{-- Riwayat Keputusan (tahap Admin & Pimpinan) --}}
+        <div class="card mb-4">
+            <div class="card-header py-3" style="background:#1565C0;">
+                <h5 class="mb-0 text-white fw-semibold">
+                    <i class="bi bi-check2-all me-2"></i>Riwayat Keputusan
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                @forelse($riwayatApproval as $apv)
+                    @php
+                        $apvCfg = [
+                            'Approved' => ['bg' => '#d1fae5', 'color' => '#065f46', 'icon' => 'bi-check-circle-fill'],
+                            'Rejected' => ['bg' => '#fee2e2', 'color' => '#991b1b', 'icon' => 'bi-x-circle-fill'],
+                            'Revision' => ['bg' => '#dbeafe', 'color' => '#1e40af', 'icon' => 'bi-arrow-repeat'],
+                        ][$apv->keputusan] ?? ['bg' => '#f1f5f9', 'color' => '#64748b', 'icon' => 'bi-circle'];
+                    @endphp
+                    <div class="d-flex gap-3 {{ $loop->last ? '' : 'pb-3 mb-3 border-bottom' }}">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                             style="width:42px;height:42px;background:{{ $apvCfg['bg'] }};">
                             <i class="bi {{ $apvCfg['icon'] }} fs-5" style="color:{{ $apvCfg['color'] }};"></i>
                         </div>
-                        <div>
-                            <div class="fw-bold" style="color:{{ $apvCfg['color'] }};">
-                                {{ $approval->keputusan }}
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between flex-wrap gap-1">
+                                <div class="fw-bold" style="color:{{ $apvCfg['color'] }};">
+                                    {{ $apv->keputusan }}
+                                    <span class="badge bg-light text-dark border ms-1 fw-normal">
+                                        Tahap {{ $apv->tahap }}
+                                    </span>
+                                </div>
+                                <div class="text-muted small">
+                                    {{ \Carbon\Carbon::parse($apv->tanggal_approval)->format('d M Y, H:i') }}
+                                </div>
                             </div>
-                            <div class="text-muted small">
-                                {{ \Carbon\Carbon::parse($approval->tanggal_approval)->format('d M Y, H:i') }}
+                            <div class="small mt-1">
+                                <span class="text-muted">Oleh:</span>
+                                <span class="fw-semibold">{{ $apv->nama_pengambil }}</span>
+                                @if($apv->jabatan_pengambil)
+                                    <span class="text-muted">· {{ $apv->jabatan_pengambil }}</span>
+                                @endif
+                            </div>
+                            <div class="small mt-1">
+                                <span class="text-muted">Catatan:</span>
+                                {{ $apv->catatan_approval ?: '—' }}
                             </div>
                         </div>
                     </div>
-
-                    <table class="table table-borderless table-sm mb-0">
-                        <tr>
-                            <td class="text-muted" style="width:40%">Disetujui oleh</td>
-                            <td class="fw-semibold">{{ $approval->nama_pimpinan }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Jabatan</td>
-                            <td>{{ $approval->jabatan_pimpinan ?? '—' }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Catatan</td>
-                            <td>{{ $approval->catatan_approval ?? '—' }}</td>
-                        </tr>
-                    </table>
-                @else
+                @empty
                     <div class="text-center py-4 text-muted">
                         <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2"
                              style="width:52px;height:52px;background:#fef3c7;">
                             <i class="bi bi-hourglass-split fs-4" style="color:#92400e;"></i>
                         </div>
-                        <div class="small">Menunggu keputusan Pimpinan</div>
+                        <div class="small">Belum ada keputusan. Menunggu verifikasi Admin.</div>
                     </div>
-                @endif
+                @endforelse
             </div>
         </div>
 
@@ -376,8 +441,12 @@
                                 </span>
                             @elseif($permintaan->status_permintaan == 'Distributed')
                                 Barang telah didistribusikan.
-                            @else
+                            @elseif($permintaan->status_permintaan == 'Pending')
+                                Menunggu verifikasi Admin.
+                            @elseif($permintaan->status_permintaan == 'Verified')
                                 Menunggu persetujuan Pimpinan.
+                            @else
+                                Permintaan dikembalikan ke User (tidak diproses).
                             @endif
                         </div>
                     </div>

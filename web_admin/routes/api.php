@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\NotifikasiApiController;
 use App\Http\Controllers\Api\Admin\InboundApiController;
 use App\Http\Controllers\Api\Admin\DistribusiScanApiController;
 use App\Http\Controllers\Api\Admin\OpnameApiController;
+use App\Http\Controllers\Api\Admin\VerifikasiApiController;
 
 // ----------------------------------------------------------------
 // Public API — tidak perlu token
@@ -56,6 +57,12 @@ Route::middleware('auth.api')->group(function () {
     Route::get('/admin/distribusi/{id}',                 [DistribusiScanApiController::class, 'detail']);
     Route::post('/admin/distribusi/{id}/checkout',        [DistribusiScanApiController::class, 'checkout']);
     Route::post('/admin/distribusi/{id}/outbound',        [DistribusiScanApiController::class, 'outbound']);
+
+    // Verifikasi Permintaan — tahap 1 approval (Admin → diteruskan ke Pimpinan)
+    Route::get('/admin/verifikasi',           [VerifikasiApiController::class, 'index']);
+    Route::get('/admin/verifikasi-riwayat',   [VerifikasiApiController::class, 'riwayat']);
+    Route::get('/admin/verifikasi/{id}',      [VerifikasiApiController::class, 'show']);
+    Route::post('/admin/verifikasi/{id}',     [VerifikasiApiController::class, 'store']);
 
     // Scan Audit / Stock Opname
     Route::get('/admin/opname/aktif',              [OpnameApiController::class, 'aktif']);

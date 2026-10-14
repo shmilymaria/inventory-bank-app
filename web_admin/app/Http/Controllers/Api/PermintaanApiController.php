@@ -76,12 +76,22 @@ class PermintaanApiController extends Controller
             ->latest('approval.tanggal_approval')
             ->first();
 
+        // Seluruh riwayat keputusan (tahap Admin & Pimpinan), terbaru di atas.
+        // `nama_pimpinan` berisi nama pengambil keputusan, `tahap` = Admin/Pimpinan.
+        $riwayatApproval = DB::table('approval')
+            ->join('users', 'approval.pimpinan_id', '=', 'users.id')
+            ->select('approval.*', 'users.nama_lengkap as nama_pimpinan')
+            ->where('approval.permintaan_id', $id)
+            ->orderBy('approval.tanggal_approval', 'desc')
+            ->get();
+
         return response()->json([
             'success' => true,
             'data'    => [
-                'permintaan'   => $permintaan,
-                'detail_items' => $detailItems,
-                'approval'     => $approval,
+                'permintaan'       => $permintaan,
+                'detail_items'     => $detailItems,
+                'approval'         => $approval,
+                'riwayat_approval' => $riwayatApproval,
             ],
         ]);
     }
@@ -164,20 +174,21 @@ class PermintaanApiController extends Controller
                 ]);
             }
 
-            // Kirim notifikasi ke semua Pimpinan
-            $pimpinan = DB::table('users')
-                ->where('role_id', 3)
+            // Permintaan baru lebih dulu diverifikasi Admin (bagian umum),
+            // baru diteruskan ke Pimpinan. Jadi yang dikabari: semua Admin aktif.
+            $admins = DB::table('users')
+                ->where('role_id', 1)
                 ->where('status_aktif', 'Aktif')
                 ->get();
 
-            foreach ($pimpinan as $p) {
+            foreach ($admins as $p) {
                 DB::table('notifikasi')->insert([
                     'user_id'     => $p->id,
-                    'judul'       => 'Permintaan Baru Masuk',
+                    'judul'       => 'Permintaan Baru Perlu Verifikasi',
                     'pesan'       => 'Permintaan ' . $nomor . ' dari ' .
                                      $user->nama_lengkap . ' (' .
                                      ($user->bagian ?? '-') .
-                                     ') menunggu persetujuan Anda.',
+                                     ') menunggu verifikasi Anda.',
                     'status_baca' => 'Belum Dibaca',
                     'created_at'  => now(),
                 ]);

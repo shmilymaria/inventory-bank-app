@@ -152,6 +152,8 @@ class ApiController extends Controller
                     ->where('status_barang', 'Stok Menipis')->count(),
                 'barang_habis'        => DB::table('barang')
                     ->where('status_barang', 'Habis')->count(),
+                'perlu_verifikasi'    => DB::table('permintaan')
+                    ->where('status_permintaan', 'Pending')->count(),
                 'siap_distribusi'     => DB::table('permintaan')
                     ->leftJoin('distribusi', 'permintaan.id', '=', 'distribusi.permintaan_id')
                     ->where('permintaan.status_permintaan', 'Approved')
@@ -176,7 +178,7 @@ class ApiController extends Controller
                     ->where('user_id', $user->id)->count(),
                 'pending'          => DB::table('permintaan')
                     ->where('user_id', $user->id)
-                    ->where('status_permintaan', 'Pending')->count(),
+                    ->whereIn('status_permintaan', ['Pending', 'Verified'])->count(),
                 'approved'         => DB::table('permintaan')
                     ->where('user_id', $user->id)
                     ->where('status_permintaan', 'Approved')->count(),
@@ -197,12 +199,14 @@ class ApiController extends Controller
             $data = [
                 'total_permintaan'  => DB::table('permintaan')->count(),
                 'menunggu_approval' => DB::table('permintaan')
-                    ->where('status_permintaan', 'Pending')->count(),
+                    ->where('status_permintaan', 'Verified')->count(),
                 'sudah_diapprove'   => DB::table('approval')
                     ->where('pimpinan_id', $user->id)
+                    ->where('tahap', 'Pimpinan')
                     ->where('keputusan', 'Approved')->count(),
                 'sudah_direject'    => DB::table('approval')
                     ->where('pimpinan_id', $user->id)
+                    ->where('tahap', 'Pimpinan')
                     ->where('keputusan', 'Rejected')->count(),
                 'notifikasi_belum_dibaca' => DB::table('notifikasi')
                     ->where('user_id', $user->id)
@@ -210,7 +214,7 @@ class ApiController extends Controller
                 'permintaan_terbaru' => DB::table('permintaan')
                     ->join('users', 'permintaan.user_id', '=', 'users.id')
                     ->select('permintaan.*', 'users.nama_lengkap', 'users.bagian')
-                    ->where('permintaan.status_permintaan', 'Pending')
+                    ->where('permintaan.status_permintaan', 'Verified')
                     ->orderBy('permintaan.id', 'desc')
                     ->limit(5)
                     ->get(),

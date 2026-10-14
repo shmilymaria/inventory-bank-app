@@ -150,6 +150,8 @@
                         <td class="pe-4">
                             @if($req->status_permintaan == 'Pending')
                                 <span class="badge bg-warning text-dark">Pending</span>
+                            @elseif($req->status_permintaan == 'Verified')
+                                <span class="badge" style="background:#cffafe;color:#155e75;">Verified</span>
                             @elseif($req->status_permintaan == 'Approved')
                                 <span class="badge bg-success">Approved</span>
                             @elseif($req->status_permintaan == 'Rejected')

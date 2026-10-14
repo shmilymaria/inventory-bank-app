@@ -92,12 +92,13 @@ class _ScanInboundPageState extends State<ScanInboundPage> {
         title          : const Text('Scan Inbound'),
         backgroundColor: primary,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _bukaTambahBarangBaru(),
-        icon     : const Icon(Icons.add),
-        label    : const Text('Barang Baru'),
-        backgroundColor: primary,
-      ),
+    floatingActionButton: FloatingActionButton.extended(
+      onPressed: () => _bukaTambahBarangBaru(),
+      icon: const Icon(Icons.add),
+      label: const Text('Barang Baru'),
+      backgroundColor: primary,
+      foregroundColor: Colors.white,
+    ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(

@@ -209,6 +209,7 @@
                 @php
                     $statusList = [
                         'Pending'     => ['color' => '#92400e',  'bg' => '#fef3c7'],
+                        'Verified'    => ['color' => '#155e75',  'bg' => '#cffafe'],
                         'Approved'    => ['color' => '#065f46',  'bg' => '#d1fae5'],
                         'Rejected'    => ['color' => '#991b1b',  'bg' => '#fee2e2'],
                         'Revision'    => ['color' => '#1e40af',  'bg' => '#dbeafe'],

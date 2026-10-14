@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:inventori_bank/constants/app_constants.dart';
 import 'package:inventori_bank/services/auth_service.dart';
 import 'package:inventori_bank/services/api_service.dart';
+import 'package:inventori_bank/pages/admin/verifikasi/verifikasi_list_page.dart';
 import 'package:inventori_bank/pages/admin/inbound/scan_inbound_page.dart';
 import 'package:inventori_bank/pages/admin/distribusi/distribusi_list_page.dart';
 import 'package:inventori_bank/pages/admin/opname/opname_page.dart';
@@ -118,6 +119,17 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     childAspectRatio: 1.15,
                     children: [
                       _menuCard(
+                        icon : Icons.rule,
+                        label: 'Verifikasi Permintaan',
+                        desc : 'Periksa permintaan User',
+                        color: Colors.deepOrange,
+                        onTap: () async {
+                          await Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => const VerifikasiListPage()));
+                          _load();
+                        },
+                      ),
+                      _menuCard(
                         icon : Icons.move_to_inbox_outlined,
                         label: 'Scan Inbound',
                         desc : 'Tambah stok barang masuk',
@@ -166,9 +178,48 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     final barangHabis = _stats['barang_habis'] ?? 0;
     final siapDistribusi = _stats['siap_distribusi'] ?? 0;
     final opnameJalan = _stats['opname_berlangsung'] == true;
+    final perluVerifikasi =
+        int.tryParse((_stats['perlu_verifikasi'] ?? 0).toString()) ?? 0;
     final inboundHariIni = _stats['inbound_hari_ini'] ?? 0;
 
     return Column(children: [
+      if (perluVerifikasi > 0) ...[
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () async {
+            await Navigator.push(context, MaterialPageRoute(
+                builder: (_) => const VerifikasiListPage()));
+            _load();
+          },
+          child: Container(
+            width  : double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange.shade300),
+            ),
+            child: Row(children: [
+              Icon(Icons.rule, color: Colors.orange.shade800, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$perluVerifikasi permintaan menunggu verifikasi Anda',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700,
+                      color: Colors.orange.shade900),
+                ),
+              ),
+              Text('Periksa',
+                  style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600,
+                      color: Colors.orange.shade800)),
+              Icon(Icons.chevron_right, color: Colors.orange.shade800),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
       Row(children: [
         Expanded(child: _statCard(
           icon : Icons.warning_amber_rounded,

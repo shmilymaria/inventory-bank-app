@@ -32,7 +32,8 @@ class ApprovalApiController extends Controller
         if ($request->filled('status')) {
             $query->where('permintaan.status_permintaan', $request->status);
         } else {
-            $query->where('permintaan.status_permintaan', 'Pending');
+            // Pimpinan hanya melihat permintaan yang sudah diverifikasi Admin
+            $query->where('permintaan.status_permintaan', 'Verified');
         }
 
         $permintaan = $query->orderBy('permintaan.id', 'desc')->get();
@@ -88,6 +89,8 @@ class ApprovalApiController extends Controller
             ->where('approval.permintaan_id', $id)
             ->orderBy('approval.tanggal_approval', 'desc')
             ->get();
+        // Catatan: kolom `tahap` ('Admin'/'Pimpinan') ikut terbawa lewat approval.*
+        // dan `nama_pimpinan` berisi nama pengambil keputusan di tahap tsb.
 
         return response()->json([
             'success' => true,
@@ -112,13 +115,13 @@ class ApprovalApiController extends Controller
         $pimpinan   = $this->authUser($request);
         $permintaan = DB::table('permintaan')
             ->where('id', $id)
-            ->whereIn('status_permintaan', ['Pending', 'Revision'])
+            ->where('status_permintaan', 'Verified') // sudah lolos verifikasi Admin
             ->first();
 
         if (!$permintaan) {
             return response()->json([
                 'success' => false,
-                'message' => 'Permintaan tidak ditemukan atau sudah diproses.',
+                'message' => 'Permintaan tidak ditemukan, belum diverifikasi Admin, atau sudah diproses.',
             ], 404);
         }
 
@@ -127,6 +130,7 @@ class ApprovalApiController extends Controller
             DB::table('approval')->insert([
                 'permintaan_id'    => $id,
                 'pimpinan_id'      => $pimpinan->id,
+                'tahap'            => 'Pimpinan',
                 'keputusan'        => $request->keputusan,
                 'catatan_approval' => $request->catatan_approval,
                 'tanggal_approval' => now(),
@@ -150,12 +154,14 @@ class ApprovalApiController extends Controller
                               ' Anda telah DISETUJUI oleh ' . $pimpinan->nama_lengkap .
                               '. Barang akan segera didistribusikan.',
                 'Rejected' => 'Permintaan ' . $permintaan->nomor_permintaan .
-                              ' Anda telah DITOLAK oleh ' . $pimpinan->nama_lengkap .
+                              ' Anda telah DITOLAK oleh Pimpinan (' . $pimpinan->nama_lengkap . ')' .
                               ($request->catatan_approval
-                                  ? '. Catatan: ' . $request->catatan_approval : '.'),
+                                  ? '. Catatan: ' . $request->catatan_approval : '') .
+                              '. Silakan ajukan permintaan ulang bila diperlukan.',
                 'Revision' => 'Permintaan ' . $permintaan->nomor_permintaan .
                               ' perlu DIREVISI. Catatan dari Pimpinan: ' .
-                              ($request->catatan_approval ?? '-'),
+                              ($request->catatan_approval ?? '-') .
+                              '. Silakan ajukan permintaan ulang sesuai catatan tersebut.',
             ];
 
             DB::table('notifikasi')->insert([
@@ -214,6 +220,7 @@ class ApprovalApiController extends Controller
                 'users.bagian'
             )
             ->where('approval.pimpinan_id', $pimpinan->id)
+            ->where('approval.tahap', 'Pimpinan')
             ->orderBy('approval.tanggal_approval', 'desc')
             ->get();
 

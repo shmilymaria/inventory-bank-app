@@ -23,6 +23,8 @@ class LaporanController extends Controller
             // Permintaan
             'total_permintaan' => DB::table('permintaan')->count(),
             'pending'          => DB::table('permintaan')->where('status_permintaan', 'Pending')->count(),
+            'verified'         => DB::table('permintaan')->where('status_permintaan', 'Verified')->count(),
+            'revision'         => DB::table('permintaan')->where('status_permintaan', 'Revision')->count(),
             'approved'         => DB::table('permintaan')->where('status_permintaan', 'Approved')->count(),
             'rejected'         => DB::table('permintaan')->where('status_permintaan', 'Rejected')->count(),
             'distributed'      => DB::table('permintaan')->where('status_permintaan', 'Distributed')->count(),

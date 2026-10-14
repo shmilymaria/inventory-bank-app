@@ -302,7 +302,7 @@ class _PimpinanDashboardPageState
                 decoration: BoxDecoration(
                     color       : const Color(0xFFFEF3C7),
                     borderRadius: BorderRadius.circular(20)),
-                child: const Text('Pending',
+                child: const Text('Menunggu Disposisi',
                     style: TextStyle(
                         color     : Color(0xFF92400E),
                         fontSize  : 11,
