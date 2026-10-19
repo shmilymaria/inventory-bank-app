@@ -32,9 +32,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     ]);
 
     setState(() {
-      _user    = results[0] as Map<String, dynamic>;
-      _stats   = (results[1] as Map)['success'] == true
-          ? Map<String, dynamic>.from((results[1] as Map)['data'])
+      _user    = results[0];
+      _stats   = results[1]['success'] == true
+          ? Map<String, dynamic>.from(results[1]['data'])
           : {};
       _loading = false;
     });

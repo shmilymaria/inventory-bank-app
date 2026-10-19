@@ -47,6 +47,20 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> put(
+      String endpoint, Map<String, dynamic> body) async {
+    try {
+      final res = await http.put(
+        Uri.parse('${AppConstants.baseUrl}$endpoint'),
+        headers: await _headers(),
+        body   : jsonEncode(body),
+      ).timeout(const Duration(seconds: 15));
+      return jsonDecode(res.body);
+    } catch (_) {
+      return {'success': false, 'message': 'Gagal terhubung ke server.'};
+    }
+  }
+
   static Future<Map<String, dynamic>> patch(
       String endpoint, Map<String, dynamic> body) async {
     try {

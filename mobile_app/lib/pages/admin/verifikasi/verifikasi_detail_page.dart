@@ -62,8 +62,12 @@ class _VerifikasiDetailPageState extends State<VerifikasiDetailPage> {
       return;
     }
 
+    final butuhPimpinan = _data['butuh_pimpinan'] == true;
     final teks = {
-      'Approved': 'Teruskan permintaan ini ke Pimpinan untuk disposisi?',
+      'Approved': butuhPimpinan
+          ? 'Teruskan permintaan ini ke Pimpinan untuk disposisi?'
+          : 'Setujui permintaan ini? Barang akan langsung siap didistribusikan '
+            '(prioritas ini tidak memerlukan persetujuan Pimpinan).',
       'Revision': 'Kembalikan permintaan ini ke User untuk direvisi?',
       'Rejected': 'Tolak permintaan ini dan kembalikan ke User?',
     }[_keputusan]!;
@@ -122,6 +126,7 @@ class _VerifikasiDetailPageState extends State<VerifikasiDetailPage> {
     final p        = _data['permintaan'];
     final items    = (_data['detail_items'] as List?) ?? [];
     final riwayat  = (_data['riwayat_approval'] as List?) ?? [];
+    final perubahan = (_data['riwayat_perubahan'] as List?) ?? [];
     final status   = p?['status_permintaan']?.toString() ?? '';
 
     return Scaffold(
@@ -146,6 +151,7 @@ class _VerifikasiDetailPageState extends State<VerifikasiDetailPage> {
                         _baris('Bagian', p['bagian']?.toString() ?? '-'),
                         _baris('Jabatan', p['jabatan']?.toString() ?? '-'),
                         _baris('Prioritas', p['prioritas']?.toString() ?? '-'),
+                        _baris('Alur', _data['keterangan_alur']?.toString() ?? '-'),
                         _baris('Diajukan', _fmt(p['tanggal_permintaan'])),
                         if ((p['catatan'] ?? '').toString().isNotEmpty)
                           _baris('Catatan', p['catatan'].toString()),
@@ -163,6 +169,12 @@ class _VerifikasiDetailPageState extends State<VerifikasiDetailPage> {
                             Column(children: riwayat.map(_barisRiwayat).toList())),
                       ],
 
+                      if (perubahan.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        _kartu('Riwayat Perubahan oleh Pemohon', Icons.history,
+                            Column(children: perubahan.map(_barisPerubahan).toList())),
+                      ],
+
                       const SizedBox(height: 14),
 
                       if (status == 'Pending')
@@ -176,7 +188,9 @@ class _VerifikasiDetailPageState extends State<VerifikasiDetailPage> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            'Permintaan ini sudah diverifikasi (status saat ini: $status).',
+                            status == 'Cancelled'
+                                ? 'Permintaan ini dibatalkan oleh pemohon.'
+                                : 'Permintaan ini sudah diverifikasi (status saat ini: $status).',
                             style: TextStyle(color: Colors.blueGrey.shade700, fontSize: 13),
                           ),
                         ),
@@ -191,7 +205,13 @@ class _VerifikasiDetailPageState extends State<VerifikasiDetailPage> {
   // ── Form keputusan ─────────────────────────────────────────
   Widget _formKeputusan() {
     final opsi = <String, List<dynamic>>{
-      'Approved': ['Approved', 'Teruskan ke Pimpinan', Colors.green],
+      'Approved': [
+        'Approved',
+        _data['butuh_pimpinan'] == true
+            ? 'Teruskan ke Pimpinan'
+            : 'Siap distribusi (tanpa Pimpinan)',
+        Colors.green,
+      ],
       'Revision': ['Revision', 'Minta revisi User',    Colors.blue],
       'Rejected': ['Rejected', 'Tolak',                Colors.red],
     };
@@ -305,6 +325,21 @@ class _VerifikasiDetailPageState extends State<VerifikasiDetailPage> {
                   fontSize: 11.5, fontStyle: FontStyle.italic,
                   color: Colors.grey.shade600)),
         ],
+      ]),
+    );
+  }
+
+  Widget _barisPerubahan(dynamic l) {
+    final ringkasan = (l['ringkasan'] ?? '').toString();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('${l['jenis']} · ${_fmt(l['created_at'])}',
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        Text('oleh ${l['nama_pelaku'] ?? '-'}',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+        if (ringkasan.isNotEmpty)
+          Text(ringkasan, style: const TextStyle(fontSize: 12)),
       ]),
     );
   }

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Barang;
+use App\Services\PermintaanService;
+use App\Support\AlurPermintaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +24,11 @@ class PermintaanApiController extends Controller
     {
         $user  = $this->authUser($request);
         $query = DB::table('permintaan')
+            ->select(
+                'permintaan.*',
+                DB::raw('(SELECT COUNT(*) FROM detail_permintaan d ' .
+                        'WHERE d.permintaan_id = permintaan.id) AS total_item')
+            )
             ->where('user_id', $user->id);
 
         if ($request->filled('status')) {
@@ -64,6 +71,7 @@ class PermintaanApiController extends Controller
                 'barang.nama_barang',
                 'barang.satuan',
                 'barang.stok',
+                'barang.gambar',
                 'kategori_barang.nama_kategori'
             )
             ->where('detail_permintaan.permintaan_id', $id)
@@ -85,13 +93,27 @@ class PermintaanApiController extends Controller
             ->orderBy('approval.tanggal_approval', 'desc')
             ->get();
 
+        $status = $permintaan->status_permintaan;
+
         return response()->json([
             'success' => true,
             'data'    => [
-                'permintaan'       => $permintaan,
-                'detail_items'     => $detailItems,
-                'approval'         => $approval,
-                'riwayat_approval' => $riwayatApproval,
+                'permintaan'        => $permintaan,
+                'detail_items'      => $detailItems,
+                'approval'          => $approval,
+                'riwayat_approval'  => $riwayatApproval,
+                'riwayat_perubahan' => AlurPermintaan::riwayatPerubahan($id),
+
+                // Alur & aksi yang boleh dilakukan User saat ini
+                'butuh_pimpinan'    => AlurPermintaan::butuhPimpinan($permintaan->prioritas),
+                'keterangan_alur'   => AlurPermintaan::keteranganAlur($permintaan->prioritas),
+                'bisa_edit'         => $status === 'Pending',
+                'bisa_batal'        => $status === 'Pending',
+                'bisa_revisi'       => $status === 'Revision',
+                'tahap_revisi'      => $status === 'Revision'
+                    ? AlurPermintaan::tahapRevisiTerakhir($id) : null,
+                'siap_diambil'      => AlurPermintaan::siapDistribusi($permintaan)
+                    && !empty($permintaan->qr_token),
             ],
         ]);
     }
@@ -111,7 +133,10 @@ class PermintaanApiController extends Controller
                 'barang.stok',
                 'barang.satuan',
                 'barang.status_barang',
-                'kategori_barang.nama_kategori'
+                'barang.kategori_id',
+                'kategori_barang.nama_kategori',
+                // ATK / Barang Cetakan / Barang Lainnya (untuk tombol kategori di katalog)
+                DB::raw(AlurPermintaan::kelompokKategoriSql() . ' AS kelompok_kategori')
             )
             // Catatan: barang dengan status "Habis" tetap dikirim ke mobile
             // (tidak difilter) supaya tetap tampil di katalog, hanya saja
@@ -140,65 +165,72 @@ class PermintaanApiController extends Controller
             'items.*.keterangan' => 'nullable|string',
         ]);
 
-        $user = $this->authUser($request);
+        $hasil = PermintaanService::buat(
+            $this->authUser($request),
+            $request->prioritas,
+            $request->catatan,
+            $request->items
+        );
 
-        // Generate nomor permintaan
-        $tahun = date('Y');
-        $bulan = date('m');
-        $count = DB::table('permintaan')
-            ->whereYear('created_at', $tahun)
-            ->whereMonth('created_at', $bulan)
-            ->count() + 1;
-        $nomor = 'REQ-' . $tahun . $bulan . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+        return $this->balas($hasil);
+    }
 
-        DB::transaction(function () use ($request, $user, $nomor) {
+    // ----------------------------------------------------------------
+    // PUT /api/permintaan/{id} — edit permintaan (hanya status Pending)
+    // ----------------------------------------------------------------
+    public function update(Request $request, int $id)
+    {
+        return $this->ubah($request, $id, 'edit');
+    }
 
-            // Simpan header permintaan
-            $permintaanId = DB::table('permintaan')->insertGetId([
-                'nomor_permintaan'   => $nomor,
-                'user_id'            => $user->id,
-                'tanggal_permintaan' => now(),
-                'prioritas'          => $request->prioritas,
-                'catatan'            => $request->catatan,
-                'status_permintaan'  => 'Pending',
-                'created_at'         => now(),
-            ]);
+    // ----------------------------------------------------------------
+    // PUT /api/permintaan/{id}/revisi — kirim ulang revisi (status Revision)
+    // Permintaan & nomor yang sama, tidak membuat permintaan baru.
+    // ----------------------------------------------------------------
+    public function revisi(Request $request, int $id)
+    {
+        return $this->ubah($request, $id, 'revisi');
+    }
 
-            // Simpan detail item
-            foreach ($request->items as $item) {
-                DB::table('detail_permintaan')->insert([
-                    'permintaan_id' => $permintaanId,
-                    'barang_id'     => $item['barang_id'],
-                    'jumlah'        => $item['jumlah'],
-                    'keterangan'    => $item['keterangan'] ?? null,
-                ]);
-            }
+    // ----------------------------------------------------------------
+    // POST /api/permintaan/{id}/batal — batalkan (hanya status Pending)
+    // ----------------------------------------------------------------
+    public function batalkan(Request $request, int $id)
+    {
+        return $this->balas(
+            PermintaanService::batalkan($id, $this->authUser($request))
+        );
+    }
 
-            // Permintaan baru lebih dulu diverifikasi Admin (bagian umum),
-            // baru diteruskan ke Pimpinan. Jadi yang dikabari: semua Admin aktif.
-            $admins = DB::table('users')
-                ->where('role_id', 1)
-                ->where('status_aktif', 'Aktif')
-                ->get();
+    // ── Helper bersama edit & revisi ──────────────────────────────
+    private function ubah(Request $request, int $id, string $mode)
+    {
+        $request->validate([
+            'prioritas'         => 'required|in:Normal,Penting,Mendesak',
+            'catatan'           => 'nullable|string|max:500',
+            'items'             => 'required|array|min:1',
+            'items.*.detail_id' => 'required|integer',
+            'items.*.jumlah'    => 'required|integer|min:1',
+        ]);
 
-            foreach ($admins as $p) {
-                DB::table('notifikasi')->insert([
-                    'user_id'     => $p->id,
-                    'judul'       => 'Permintaan Baru Perlu Verifikasi',
-                    'pesan'       => 'Permintaan ' . $nomor . ' dari ' .
-                                     $user->nama_lengkap . ' (' .
-                                     ($user->bagian ?? '-') .
-                                     ') menunggu verifikasi Anda.',
-                    'status_baca' => 'Belum Dibaca',
-                    'created_at'  => now(),
-                ]);
-            }
-        });
+        $hasil = PermintaanService::ubah(
+            $id,
+            $this->authUser($request),
+            $mode,
+            $request->prioritas,
+            $request->catatan,
+            $request->items
+        );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Permintaan berhasil diajukan dengan nomor ' . $nomor . '.',
-            'data'    => ['nomor_permintaan' => $nomor],
-        ], 201);
+        return $this->balas($hasil);
+    }
+
+    private function balas(array $hasil)
+    {
+        $body = ['success' => $hasil['ok'], 'message' => $hasil['message']];
+        if (isset($hasil['data'])) {
+            $body['data'] = $hasil['data'];
+        }
+        return response()->json($body, $hasil['kode'] ?? ($hasil['ok'] ? 200 : 422));
     }
 }

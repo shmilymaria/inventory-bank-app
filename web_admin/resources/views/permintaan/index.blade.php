@@ -38,7 +38,7 @@
         <div class="card card-stat h-100" style="border-left:4px solid #0891b2;">
             <div class="card-body text-center py-3">
                 <div class="fw-bold fs-3" style="color:#0891b2;">{{ $stats['verified'] }}</div>
-                <div class="text-muted small" title="Sudah diverifikasi Admin, menunggu disposisi Pimpinan">Verified</div>
+                <div class="text-muted small" title="Lolos verifikasi Admin (prioritas Penting: lanjut ke Pimpinan)">Verified</div>
             </div>
         </div>
     </div>
@@ -102,11 +102,12 @@
                     <option value="">Semua Status</option>
                     @foreach([
                         'Pending'     => 'Pending (Menunggu Admin)',
-                        'Verified'    => 'Verified (Menunggu Pimpinan)',
+                        'Verified'    => 'Verified (Lolos Admin)',
                         'Approved'    => 'Approved',
                         'Rejected'    => 'Rejected',
                         'Revision'    => 'Revision',
                         'Distributed' => 'Distributed',
+                        'Cancelled'   => 'Cancelled (Dibatalkan User)',
                     ] as $s => $labelStatus)
                         <option value="{{ $s }}" {{ request('status') == $s ? 'selected' : '' }}>
                             {{ $labelStatus }}
@@ -219,6 +220,7 @@
                                     $statusConfig = [
                                         'Pending'     => ['bg' => '#fef3c7', 'color' => '#92400e',  'icon' => 'bi-hourglass-split'],
                                         'Verified'    => ['bg' => '#cffafe', 'color' => '#155e75',  'icon' => 'bi-patch-check'],
+                                        'Cancelled'   => ['bg' => '#e5e7eb', 'color' => '#374151',  'icon' => 'bi-slash-circle'],
                                         'Approved'    => ['bg' => '#d1fae5', 'color' => '#065f46',  'icon' => 'bi-check-circle'],
                                         'Rejected'    => ['bg' => '#fee2e2', 'color' => '#991b1b',  'icon' => 'bi-x-circle'],
                                         'Revision'    => ['bg' => '#dbeafe', 'color' => '#1e40af',  'icon' => 'bi-arrow-repeat'],

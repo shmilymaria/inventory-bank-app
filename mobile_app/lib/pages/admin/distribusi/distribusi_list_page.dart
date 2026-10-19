@@ -261,8 +261,8 @@ class _DistribusiListPageState extends State<DistribusiListPage> {
 
   Widget _prioritasBadge(String p) {
     Color color = Colors.grey;
-    if (p == 'Mendesak') color = Colors.red.shade600;
-    if (p == 'Penting')  color = Colors.orange.shade600;
+    if (p == 'Mendesak') color = Colors.amber.shade800;  // kuning
+    if (p == 'Penting')  color = Colors.red.shade600;    // merah
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(

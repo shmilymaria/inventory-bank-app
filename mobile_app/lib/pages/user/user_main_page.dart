@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:inventori_bank/constants/app_constants.dart';
+import 'package:inventori_bank/services/cart_service.dart';
 import 'package:inventori_bank/pages/user/user_dashboard_page.dart';
 import 'package:inventori_bank/pages/user/riwayat_permintaan_page.dart';
 import 'package:inventori_bank/pages/user/ajukan_permintaan_page.dart';
@@ -16,18 +17,39 @@ class UserMainPage extends StatefulWidget {
 class UserMainPageState extends State<UserMainPage> {
   int _idx = 0;
 
-  // Key untuk mengakses RiwayatPermintaanPage
+  // Key untuk mengakses halaman-halaman tab dari luar
+  final GlobalKey<UserDashboardPageState> _berandaKey =
+      GlobalKey<UserDashboardPageState>();
   final GlobalKey<RiwayatPermintaanPageState> _riwayatKey =
       GlobalKey<RiwayatPermintaanPageState>();
+  final GlobalKey<UserNotifikasiPageState> _notifKey =
+      GlobalKey<UserNotifikasiPageState>();
+  final GlobalKey<AjukanPermintaanPageState> _ajukanKey =
+      GlobalKey<AjukanPermintaanPageState>();
 
   // Navigasi ke tab tertentu dari luar
   void goToTab(int index) {
     setState(() => _idx = index);
+    _segarkanTab(index);
+  }
+
+  // Beranda → Riwayat dengan filter status tertentu ('' = Semua)
+  void goToRiwayat(String status) {
+    setState(() => _idx = 1);
+    _riwayatKey.currentState?.setFilter(status);
+  }
+
+  // Beranda → Ajukan dengan kelompok kategori tertentu
+  // ('ATK' / 'Barang Cetakan' / 'Barang Lainnya' / null = Semua)
+  void goToAjukan({String? kelompok}) {
+    setState(() => _idx = 2);
+    _ajukanKey.currentState?.setKelompok(kelompok);
   }
 
   // Navigasi ke Riwayat dan buka detail permintaan tertentu
   void goToRiwayatDetail(int permintaanId, String nomorPermintaan) {
     setState(() => _idx = 1); // index 1 = Riwayat
+    _riwayatKey.currentState?.setFilter('');
     // Beri jeda agar widget sudah ter-render
     Future.delayed(const Duration(milliseconds: 300), () {
       _riwayatKey.currentState?.bukaDetail(
@@ -35,16 +57,24 @@ class UserMainPageState extends State<UserMainPage> {
     });
   }
 
+  // Data Beranda & Riwayat disegarkan setiap kali tabnya dibuka lagi
+  void _segarkanTab(int index) {
+    if (index == 0) _berandaKey.currentState?.muat();
+    if (index == 1) _riwayatKey.currentState?.muat();
+    if (index == 3) _notifKey.currentState?.muat();
+  }
+
   late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+    CartService.instance.muat(); // keranjang milik akun yang sedang login
     _pages = [
-      UserDashboardPage(mainPageState: this),   // index 0 — Beranda
+      UserDashboardPage(key: _berandaKey, mainPageState: this), // index 0 — Beranda
       RiwayatPermintaanPage(key: _riwayatKey),  // index 1 — Riwayat
-      const AjukanPermintaanPage(),             // index 2 — Ajukan (tengah)
-      const UserNotifikasiPage(),               // index 3 — Notifikasi
+      AjukanPermintaanPage(key: _ajukanKey),    // index 2 — Ajukan (tengah)
+      UserNotifikasiPage(key: _notifKey),       // index 3 — Notifikasi
       const UserProfilPage(),                   // index 4 — Profil
     ];
   }
@@ -57,7 +87,10 @@ class UserMainPageState extends State<UserMainPage> {
       body: IndexedStack(index: _idx, children: _pages),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex       : _idx,
-        onTap              : (i) => setState(() => _idx = i),
+        onTap              : (i) {
+          setState(() => _idx = i);
+          _segarkanTab(i);
+        },
         selectedItemColor  : primary,
         unselectedItemColor: Colors.grey,
         type               : BottomNavigationBarType.fixed,

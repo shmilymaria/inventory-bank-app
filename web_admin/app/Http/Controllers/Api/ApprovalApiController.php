@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\AlurPermintaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -32,8 +33,10 @@ class ApprovalApiController extends Controller
         if ($request->filled('status')) {
             $query->where('permintaan.status_permintaan', $request->status);
         } else {
-            // Pimpinan hanya melihat permintaan yang sudah diverifikasi Admin
-            $query->where('permintaan.status_permintaan', 'Verified');
+            // Pimpinan hanya memutuskan permintaan prioritas Penting yang
+            // sudah diverifikasi Admin. Normal/Mendesak selesai di Admin.
+            $query->where('permintaan.status_permintaan', 'Verified')
+                  ->where('permintaan.prioritas', AlurPermintaan::PRIORITAS_BUTUH_PIMPINAN);
         }
 
         $permintaan = $query->orderBy('permintaan.id', 'desc')->get();
@@ -95,9 +98,10 @@ class ApprovalApiController extends Controller
         return response()->json([
             'success' => true,
             'data'    => [
-                'permintaan'       => $permintaan,
-                'detail_items'     => $detailItems,
-                'riwayat_approval' => $riwayatApproval,
+                'permintaan'        => $permintaan,
+                'detail_items'      => $detailItems,
+                'riwayat_approval'  => $riwayatApproval,
+                'riwayat_perubahan' => AlurPermintaan::riwayatPerubahan($id),
             ],
         ]);
     }
@@ -116,6 +120,7 @@ class ApprovalApiController extends Controller
         $permintaan = DB::table('permintaan')
             ->where('id', $id)
             ->where('status_permintaan', 'Verified') // sudah lolos verifikasi Admin
+            ->where('prioritas', AlurPermintaan::PRIORITAS_BUTUH_PIMPINAN)
             ->first();
 
         if (!$permintaan) {
@@ -149,44 +154,40 @@ class ApprovalApiController extends Controller
 
             DB::table('permintaan')->where('id', $id)->update($dataUpdatePermintaan);
 
+            $nomor = $permintaan->nomor_permintaan;
+
             $pesanMap = [
-                'Approved' => 'Permintaan ' . $permintaan->nomor_permintaan .
-                              ' Anda telah DISETUJUI oleh ' . $pimpinan->nama_lengkap .
-                              '. Barang akan segera didistribusikan.',
-                'Rejected' => 'Permintaan ' . $permintaan->nomor_permintaan .
-                              ' Anda telah DITOLAK oleh Pimpinan (' . $pimpinan->nama_lengkap . ')' .
+                'Approved' => "Permintaan $nomor Anda telah DISETUJUI oleh Pimpinan " .
+                              "({$pimpinan->nama_lengkap}). Barang akan segera " .
+                              "didistribusikan — tunjukkan QR Serah Terima ke Admin.",
+                'Rejected' => "Permintaan $nomor Anda telah DITOLAK oleh Pimpinan " .
+                              "({$pimpinan->nama_lengkap})" .
                               ($request->catatan_approval
                                   ? '. Catatan: ' . $request->catatan_approval : '') .
-                              '. Silakan ajukan permintaan ulang bila diperlukan.',
-                'Revision' => 'Permintaan ' . $permintaan->nomor_permintaan .
-                              ' perlu DIREVISI. Catatan dari Pimpinan: ' .
+                              '. Silakan ajukan permintaan baru bila diperlukan.',
+                'Revision' => "Permintaan $nomor perlu DIREVISI. Catatan dari Pimpinan: " .
                               ($request->catatan_approval ?? '-') .
-                              '. Silakan ajukan permintaan ulang sesuai catatan tersebut.',
+                              '. Buka permintaan tersebut lalu tekan Revisi — nomor ' .
+                              'permintaan tetap sama, tidak perlu membuat permintaan baru.',
             ];
 
-            DB::table('notifikasi')->insert([
-                'user_id'     => $permintaan->user_id,
-                'judul'       => 'Update Status Permintaan',
-                'pesan'       => $pesanMap[$request->keputusan],
-                'status_baca' => 'Belum Dibaca',
-                'created_at'  => now(),
-            ]);
+            AlurPermintaan::notifikasi(
+                (int) $permintaan->user_id,
+                'Update Status Permintaan',
+                $pesanMap[$request->keputusan],
+                $id
+            );
 
             // Kalau disetujui, kabari semua Admin supaya tahu ada
             // barang yang siap diproses (Scan Checkout & Outbound).
             if ($request->keputusan === 'Approved') {
-                $adminIds = DB::table('users')->where('role_id', 1)->pluck('id');
-                foreach ($adminIds as $adminId) {
-                    DB::table('notifikasi')->insert([
-                        'user_id'     => $adminId,
-                        'judul'       => 'Permintaan Siap Didistribusikan',
-                        'pesan'       => 'Permintaan ' . $permintaan->nomor_permintaan .
-                                         ' sudah disetujui Pimpinan dan siap diproses ' .
-                                         '(Scan Checkout & Outbound).',
-                        'status_baca' => 'Belum Dibaca',
-                        'created_at'  => now(),
-                    ]);
-                }
+                AlurPermintaan::notifikasiKeRole(
+                    1,
+                    'Permintaan Siap Didistribusikan',
+                    "Permintaan $nomor sudah disetujui Pimpinan dan siap diproses " .
+                    "(Scan Checkout & Outbound).",
+                    $id
+                );
             }
         });
 

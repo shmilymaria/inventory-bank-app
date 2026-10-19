@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:inventori_bank/constants/app_constants.dart';
 import 'package:inventori_bank/services/api_service.dart';
+import 'package:inventori_bank/utils/notifikasi_navigator.dart';
 
 class PimpinanNotifikasiPage extends StatefulWidget {
   const PimpinanNotifikasiPage({super.key});
@@ -33,9 +34,15 @@ class _PimpinanNotifikasiPageState extends State<PimpinanNotifikasiPage> {
     _load();
   }
 
-  Future<void> _tandaiBaca(int id) async {
-    await ApiService.patch('/notifikasi/$id/baca', {});
-    _load();
+  // Deep link: tandai dibaca lalu buka detail permintaan terkait
+  Future<void> _bukaNotifikasi(dynamic n) async {
+    if (n['status_baca'] != 'Sudah Dibaca') {
+      await ApiService.patch('/notifikasi/${n['id']}/baca', {});
+    }
+    if (!mounted) return;
+    await NotifikasiNavigator.buka(
+        context, Map<String, dynamic>.from(n), AppConstants.rolePimpinan);
+    if (mounted) _load();
   }
 
   @override
@@ -86,9 +93,7 @@ class _PimpinanNotifikasiPageState extends State<PimpinanNotifikasiPage> {
                         final dibaca = n['status_baca'] == 'Sudah Dibaca';
 
                         return GestureDetector(
-                          onTap: () {
-                            if (!dibaca) _tandaiBaca(n['id']);
-                          },
+                          onTap: () => _bukaNotifikasi(n),
                           child: Container(
                             margin    : const EdgeInsets.only(bottom: 10),
                             padding   : const EdgeInsets.all(14),
@@ -170,6 +175,18 @@ class _PimpinanNotifikasiPageState extends State<PimpinanNotifikasiPage> {
                                             fontSize: 11,
                                             color  : Colors.grey.shade400),
                                       ),
+                                      if (n['permintaan_id'] != null) ...[
+                                        const SizedBox(height: 6),
+                                        const Row(children: [
+                                          Text('Lihat detail permintaan',
+                                              style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(AppConstants.primaryColor))),
+                                          Icon(Icons.chevron_right, size: 16,
+                                              color: Color(AppConstants.primaryColor)),
+                                        ]),
+                                      ],
                                     ],
                                   ),
                                 ),

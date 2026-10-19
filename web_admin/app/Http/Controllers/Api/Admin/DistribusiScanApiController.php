@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Barang;
+use App\Support\AlurPermintaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -62,7 +63,8 @@ class DistribusiScanApiController extends Controller
                 'users.nama_lengkap',
                 'users.bagian'
             )
-            ->where('permintaan.status_permintaan', 'Approved')
+            // Siap = Approved (Pimpinan) ATAU Verified non-Penting (cukup Admin)
+            ->where(function ($q) { AlurPermintaan::scopeSiapDistribusi($q); })
             ->whereNull('distribusi.id')
             ->orderBy('permintaan.id', 'asc')
             ->get();
@@ -159,13 +161,13 @@ class DistribusiScanApiController extends Controller
         $admin      = $this->authUser($request);
         $permintaan = DB::table('permintaan')
             ->where('id', $permintaanId)
-            ->where('status_permintaan', 'Approved')
+            ->where(function ($q) { AlurPermintaan::scopeSiapDistribusi($q); })
             ->first();
 
         if (!$permintaan) {
             return response()->json([
                 'success' => false,
-                'message' => 'Permintaan tidak ditemukan atau statusnya bukan Approved.',
+                'message' => 'Permintaan tidak ditemukan atau belum siap didistribusikan.',
             ], 404);
         }
 
@@ -244,7 +246,7 @@ class DistribusiScanApiController extends Controller
         $admin      = $this->authUser($request);
         $permintaan = DB::table('permintaan')
             ->where('id', $permintaanId)
-            ->where('status_permintaan', 'Approved')
+            ->where(function ($q) { AlurPermintaan::scopeSiapDistribusi($q); })
             ->first();
 
         if (!$permintaan) {
@@ -339,14 +341,13 @@ class DistribusiScanApiController extends Controller
                 'status_permintaan' => 'Distributed',
             ]);
 
-            DB::table('notifikasi')->insert([
-                'user_id'     => $permintaan->user_id,
-                'judul'       => 'Barang Telah Didistribusikan',
-                'pesan'       => 'Permintaan ' . $permintaan->nomor_permintaan .
-                                 ' telah selesai diproses dan barang sudah didistribusikan.',
-                'status_baca' => 'Belum Dibaca',
-                'created_at'  => now(),
-            ]);
+            AlurPermintaan::notifikasi(
+                (int) $permintaan->user_id,
+                'Barang Telah Didistribusikan',
+                'Permintaan ' . $permintaan->nomor_permintaan .
+                ' telah selesai diproses dan barang sudah didistribusikan.',
+                $permintaanId
+            );
         });
 
         return response()->json([

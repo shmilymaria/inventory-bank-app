@@ -37,7 +37,7 @@
                 <label class="form-label small text-muted mb-1">Status</label>
                 <select name="status" class="form-select">
                     <option value="">Semua Status</option>
-                    @foreach(['Pending','Verified','Approved','Rejected','Revision','Distributed'] as $s)
+                    @foreach(['Pending','Verified','Approved','Rejected','Revision','Distributed','Cancelled'] as $s)
                         <option value="{{ $s }}" {{ request('status') == $s ? 'selected' : '' }}>{{ $s }}</option>
                     @endforeach
                 </select>
@@ -72,6 +72,7 @@
                     $cfgStatus = [
                         'Pending'     => ['bg' => '#fef3c7', 'color' => '#92400e'],
                         'Verified'    => ['bg' => '#cffafe', 'color' => '#155e75'],
+                        'Cancelled'   => ['bg' => '#e5e7eb', 'color' => '#374151'],
                         'Approved'    => ['bg' => '#d1fae5', 'color' => '#065f46'],
                         'Rejected'    => ['bg' => '#fee2e2', 'color' => '#991b1b'],
                         'Revision'    => ['bg' => '#dbeafe', 'color' => '#1e40af'],
@@ -205,6 +206,7 @@
                                     $cfgMap = [
                                         'Pending'     => ['#fef3c7','#92400e'],
                                         'Verified'    => ['#cffafe','#155e75'],
+                                        'Cancelled'   => ['#e5e7eb','#374151'],
                                         'Approved'    => ['#d1fae5','#065f46'],
                                         'Rejected'    => ['#fee2e2','#991b1b'],
                                         'Revision'    => ['#dbeafe','#1e40af'],

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\AlurPermintaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -21,10 +22,26 @@ class NotifikasiApiController extends Controller
     {
         $user = $this->authUser($request);
 
+        // Sertakan data permintaan terkait supaya aplikasi bisa deep link:
+        // klik notifikasi → langsung ke halaman detail permintaan yang tepat
+        // (sesuai peran: User / Admin / Pimpinan).
         $notifikasi = DB::table('notifikasi')
-            ->where('user_id', $user->id)
-            ->orderBy('id', 'desc')
-            ->get();
+            ->leftJoin('permintaan', 'notifikasi.permintaan_id', '=', 'permintaan.id')
+            ->select(
+                'notifikasi.*',
+                'permintaan.nomor_permintaan',
+                'permintaan.status_permintaan',
+                'permintaan.prioritas'
+            )
+            ->where('notifikasi.user_id', $user->id)
+            ->orderBy('notifikasi.id', 'desc')
+            ->get()
+            ->map(function ($n) {
+                // Untuk Admin: arahkan ke Proses Distribusi bila sudah siap
+                $n->siap_distribusi = $n->permintaan_id
+                    ? AlurPermintaan::siapDistribusi($n) : false;
+                return $n;
+            });
 
         $belumDibaca = $notifikasi
             ->where('status_baca', 'Belum Dibaca')

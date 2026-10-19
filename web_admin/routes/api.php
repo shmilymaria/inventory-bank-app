@@ -30,6 +30,9 @@ Route::middleware('auth.api')->group(function () {
     Route::get('/permintaan',          [PermintaanApiController::class, 'index']);
     Route::get('/permintaan/{id}',     [PermintaanApiController::class, 'show']);
     Route::post('/permintaan',         [PermintaanApiController::class, 'store']);
+    Route::put('/permintaan/{id}',         [PermintaanApiController::class, 'update']);    // edit (Pending)
+    Route::put('/permintaan/{id}/revisi',  [PermintaanApiController::class, 'revisi']);    // kirim ulang revisi
+    Route::post('/permintaan/{id}/batal',  [PermintaanApiController::class, 'batalkan']);  // batalkan (Pending)
 
     // Approval (Pimpinan)
     Route::get('/approval',            [ApprovalApiController::class, 'index']);

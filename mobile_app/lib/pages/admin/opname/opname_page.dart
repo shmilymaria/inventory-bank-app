@@ -438,7 +438,6 @@ class _OpnamePageState extends State<OpnamePage> {
 
     return Column(
       children: _riwayat.map((s) {
-        final mulai   = DateTime.tryParse(s['tanggal_mulai'].toString());
         final selesai = DateTime.tryParse(s['tanggal_selesai'].toString());
         final tglStr  = selesai != null
             ? DateFormat('dd MMM yyyy, HH:mm').format(selesai) : '-';

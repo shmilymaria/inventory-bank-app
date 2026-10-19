@@ -45,6 +45,7 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
     final permintaan      = _data['permintaan'];
     final items           = _data['detail_items'] as List? ?? [];
     final riwayatApproval = _data['riwayat_approval'] as List? ?? [];
+    final riwayatPerubahan = _data['riwayat_perubahan'] as List? ?? [];
 
     return Scaffold(
       backgroundColor: const Color(AppConstants.bgColor),
@@ -91,6 +92,12 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
 
                     // ── Riwayat Approval ────────────────────
                     _riwayatApprovalCard(riwayatApproval),
+
+                    // ── Riwayat Perubahan (revisi/edit oleh pemohon) ──
+                    if (riwayatPerubahan.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _riwayatPerubahanCard(riwayatPerubahan),
+                    ],
 
                     const SizedBox(height: 20),
                   ],
@@ -276,6 +283,35 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
   );
 
   // ── Riwayat Approval ─────────────────────────────────────
+  Widget _riwayatPerubahanCard(List log) => _card(
+    title: 'Riwayat Perubahan oleh Pemohon (${log.length})',
+    icon : Icons.history,
+    child: Column(
+      children: log.map((l) {
+        final ringkasan = (l['ringkasan'] ?? '').toString();
+        final waktu     = DateTime.tryParse(l['created_at']?.toString() ?? '');
+        final waktuStr  = waktu != null
+            ? '${waktu.day.toString().padLeft(2, '0')}/'
+              '${waktu.month.toString().padLeft(2, '0')}/${waktu.year} '
+              '${waktu.hour.toString().padLeft(2, '0')}:'
+              '${waktu.minute.toString().padLeft(2, '0')}'
+            : '-';
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${l['jenis']} · $waktuStr',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13)),
+            Text('oleh ${l['nama_pelaku'] ?? '-'}',
+                style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            if (ringkasan.isNotEmpty)
+              Text(ringkasan, style: const TextStyle(fontSize: 12)),
+          ]),
+        );
+      }).toList(),
+    ),
+  );
+
   Widget _riwayatApprovalCard(List riwayat) => _card(
     title: 'Riwayat Approval (${riwayat.length})',
     icon : Icons.verified_outlined,
@@ -425,9 +461,9 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
   Widget _prioritasBadge(String p) {
     Color color;
     if (p == 'Mendesak') {
-      color = Colors.red.shade600;
+      color = Colors.amber.shade800;   // kuning
     } else if (p == 'Penting') {
-      color = Colors.orange.shade600;
+      color = Colors.red.shade600;     // merah
     } else {
       color = Colors.grey;
     }
@@ -451,6 +487,7 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
       'Rejected'   : 0xFF991B1B,
       'Revision'   : 0xFF1E40AF,
       'Distributed': 0xFF5B21B6,
+      'Cancelled'  : 0xFF374151,
     };
     return m[s] ?? 0xFF64748B;
   }
@@ -463,6 +500,7 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
       'Rejected'   : 0xFFFEE2E2,
       'Revision'   : 0xFFDBEAFE,
       'Distributed': 0xFFEDE9FE,
+      'Cancelled'  : 0xFFE5E7EB,
     };
     return m[s] ?? 0xFFF1F5F9;
   }
@@ -475,6 +513,7 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
       'Rejected'   : Icons.cancel_outlined,
       'Revision'   : Icons.refresh,
       'Distributed': Icons.local_shipping_outlined,
+      'Cancelled'  : Icons.block,
     };
     return m[s] ?? Icons.circle_outlined;
   }
@@ -487,6 +526,7 @@ class _DetailApprovalPageState extends State<DetailApprovalPage> {
       'Rejected'   : 'Ditolak',
       'Revision'   : 'Perlu Revisi',
       'Distributed': 'Barang Didistribusikan',
+      'Cancelled'  : 'Dibatalkan Pemohon',
     };
     return m[s] ?? s;
   }

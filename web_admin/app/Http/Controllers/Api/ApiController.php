@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Support\AlurPermintaan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -154,11 +155,11 @@ class ApiController extends Controller
                     ->where('status_barang', 'Habis')->count(),
                 'perlu_verifikasi'    => DB::table('permintaan')
                     ->where('status_permintaan', 'Pending')->count(),
-                'siap_distribusi'     => DB::table('permintaan')
-                    ->leftJoin('distribusi', 'permintaan.id', '=', 'distribusi.permintaan_id')
-                    ->where('permintaan.status_permintaan', 'Approved')
-                    ->whereNull('distribusi.id')
-                    ->count(),
+                'siap_distribusi'     => AlurPermintaan::scopeSiapDistribusi(
+                        DB::table('permintaan')
+                            ->leftJoin('distribusi', 'permintaan.id', '=', 'distribusi.permintaan_id')
+                            ->whereNull('distribusi.id')
+                    )->count(),
                 'opname_berlangsung'  => DB::table('stock_opname')
                     ->where('admin_id', $user->id)
                     ->where('status_opname', 'Berlangsung')
@@ -176,19 +177,37 @@ class ApiController extends Controller
             $data = [
                 'total_permintaan' => DB::table('permintaan')
                     ->where('user_id', $user->id)->count(),
+                // Ringkasan per status (Pending = menunggu Admin, Verified = lolos Admin)
                 'pending'          => DB::table('permintaan')
                     ->where('user_id', $user->id)
-                    ->whereIn('status_permintaan', ['Pending', 'Verified'])->count(),
+                    ->where('status_permintaan', 'Pending')->count(),
+                'verified'         => DB::table('permintaan')
+                    ->where('user_id', $user->id)
+                    ->where('status_permintaan', 'Verified')->count(),
                 'approved'         => DB::table('permintaan')
                     ->where('user_id', $user->id)
                     ->where('status_permintaan', 'Approved')->count(),
+                'rejected'         => DB::table('permintaan')
+                    ->where('user_id', $user->id)
+                    ->where('status_permintaan', 'Rejected')->count(),
+                'revision'         => DB::table('permintaan')
+                    ->where('user_id', $user->id)
+                    ->where('status_permintaan', 'Revision')->count(),
                 'distributed'      => DB::table('permintaan')
                     ->where('user_id', $user->id)
                     ->where('status_permintaan', 'Distributed')->count(),
+                'cancelled'        => DB::table('permintaan')
+                    ->where('user_id', $user->id)
+                    ->where('status_permintaan', 'Cancelled')->count(),
                 'notifikasi_belum_dibaca' => DB::table('notifikasi')
                     ->where('user_id', $user->id)
                     ->where('status_baca', 'Belum Dibaca')->count(),
                 'permintaan_terbaru' => DB::table('permintaan')
+                    ->select(
+                        'permintaan.*',
+                        DB::raw('(SELECT COUNT(*) FROM detail_permintaan d ' .
+                                'WHERE d.permintaan_id = permintaan.id) AS total_item')
+                    )
                     ->where('user_id', $user->id)
                     ->orderBy('id', 'desc')
                     ->limit(5)
@@ -199,7 +218,8 @@ class ApiController extends Controller
             $data = [
                 'total_permintaan'  => DB::table('permintaan')->count(),
                 'menunggu_approval' => DB::table('permintaan')
-                    ->where('status_permintaan', 'Verified')->count(),
+                    ->where('status_permintaan', 'Verified')
+                    ->where('prioritas', AlurPermintaan::PRIORITAS_BUTUH_PIMPINAN)->count(),
                 'sudah_diapprove'   => DB::table('approval')
                     ->where('pimpinan_id', $user->id)
                     ->where('tahap', 'Pimpinan')
@@ -215,6 +235,7 @@ class ApiController extends Controller
                     ->join('users', 'permintaan.user_id', '=', 'users.id')
                     ->select('permintaan.*', 'users.nama_lengkap', 'users.bagian')
                     ->where('permintaan.status_permintaan', 'Verified')
+                    ->where('permintaan.prioritas', AlurPermintaan::PRIORITAS_BUTUH_PIMPINAN)
                     ->orderBy('permintaan.id', 'desc')
                     ->limit(5)
                     ->get(),

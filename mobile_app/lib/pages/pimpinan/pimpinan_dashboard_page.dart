@@ -33,8 +33,8 @@ class _PimpinanDashboardPageState
       AuthService.getUserData(),
     ]);
     setState(() {
-      _dash    = (results[0] as Map<String, dynamic>)['data'] ?? {};
-      _user    = results[1] as Map<String, dynamic>;
+      _dash    = results[0]['data'] ?? {};
+      _user    = results[1];
       _loading = false;
     });
   }

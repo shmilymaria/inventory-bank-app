@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\VerifikasiService;
+use App\Support\AlurPermintaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -57,6 +58,7 @@ class PermintaanController extends Controller
             'total'       => DB::table('permintaan')->count(),
             'pending'     => DB::table('permintaan')->where('status_permintaan', 'Pending')->count(),
             'verified'    => DB::table('permintaan')->where('status_permintaan', 'Verified')->count(),
+            'cancelled'   => DB::table('permintaan')->where('status_permintaan', 'Cancelled')->count(),
             'approved'    => DB::table('permintaan')->where('status_permintaan', 'Approved')->count(),
             'rejected'    => DB::table('permintaan')->where('status_permintaan', 'Rejected')->count(),
             'revision'    => DB::table('permintaan')->where('status_permintaan', 'Revision')->count(),
@@ -128,8 +130,11 @@ class PermintaanController extends Controller
             ->orderBy('approval.tanggal_approval', 'desc')
             ->get();
 
+        $riwayatPerubahan = AlurPermintaan::riwayatPerubahan($id);
+
         return view('permintaan.show', compact(
-            'permintaan', 'detailItems', 'approval', 'distribusi', 'riwayatApproval'
+            'permintaan', 'detailItems', 'approval', 'distribusi',
+            'riwayatApproval', 'riwayatPerubahan'
         ));
     }
 

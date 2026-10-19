@@ -2,14 +2,19 @@
 
 namespace App\Services;
 
+use App\Support\AlurPermintaan;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Keputusan Admin (bagian umum) atas permintaan yang baru diajukan User.
  *
- *   Approved → status 'Verified', diteruskan ke Pimpinan
+ *   Approved → status 'Verified'
+ *                • prioritas Normal / Mendesak : FINAL — siap didistribusikan,
+ *                  QR serah terima terbit, TIDAK diteruskan ke Pimpinan
+ *                • prioritas Penting           : diteruskan ke Pimpinan
  *   Rejected → status 'Rejected', kembali ke User
- *   Revision → status 'Revision', kembali ke User
+ *   Revision → status 'Revision', kembali ke User (User merevisi di
+ *              permintaan yang sama, nomor tetap)
  *
  * Dipakai bersama oleh API mobile (Api\Admin\VerifikasiApiController)
  * dan web admin (PermintaanController@verifikasi) supaya logikanya satu.
@@ -35,7 +40,7 @@ class VerifikasiService
         $catatan = $catatan !== null ? trim($catatan) : null;
 
         // Rejected / Revision wajib disertai catatan, karena catatan inilah
-        // yang jadi pegangan User saat mengajukan permintaan ulang.
+        // yang jadi pegangan User saat merevisi permintaannya.
         if ($keputusan !== 'Approved' && ($catatan === null || $catatan === '')) {
             return [
                 'ok'      => false,
@@ -55,11 +60,13 @@ class VerifikasiService
             ];
         }
 
-        $statusBaru = $keputusan === 'Approved' ? 'Verified' : $keputusan;
-        $nomor      = $permintaan->nomor_permintaan;
+        $statusBaru   = $keputusan === 'Approved' ? 'Verified' : $keputusan;
+        $nomor        = $permintaan->nomor_permintaan;
+        $butuhPimpinan = AlurPermintaan::butuhPimpinan($permintaan->prioritas);
 
         DB::transaction(function () use (
-            $permintaanId, $admin, $keputusan, $catatan, $statusBaru, $permintaan, $nomor
+            $permintaanId, $admin, $keputusan, $catatan, $statusBaru,
+            $permintaan, $nomor, $butuhPimpinan
         ) {
             DB::table('approval')->insert([
                 'permintaan_id'    => $permintaanId,
@@ -75,52 +82,67 @@ class VerifikasiService
             ]);
 
             // ── Notifikasi ke User pemohon ───────────────────────
-            $pesanUser = [
-                'Approved' => "Permintaan $nomor telah DIVERIFIKASI oleh Admin " .
-                              "({$admin->nama_lengkap}) dan diteruskan ke Pimpinan " .
-                              "untuk disposisi.",
-                'Rejected' => "Permintaan $nomor DITOLAK oleh Admin " .
-                              "({$admin->nama_lengkap}). Catatan: $catatan. " .
-                              "Silakan ajukan permintaan ulang bila diperlukan.",
-                'Revision' => "Permintaan $nomor perlu DIREVISI. Catatan dari Admin " .
-                              "({$admin->nama_lengkap}): $catatan. " .
-                              "Silakan ajukan permintaan ulang sesuai catatan tersebut.",
-            ];
-
-            DB::table('notifikasi')->insert([
-                'user_id'     => $permintaan->user_id,
-                'judul'       => 'Update Status Permintaan',
-                'pesan'       => $pesanUser[$keputusan],
-                'status_baca' => 'Belum Dibaca',
-                'created_at'  => now(),
-            ]);
-
-            // ── Kalau disetujui Admin, kabari semua Pimpinan aktif ──
             if ($keputusan === 'Approved') {
-                $pemohon = DB::table('users')->where('id', $permintaan->user_id)->first();
+                $pesanUser = $butuhPimpinan
+                    ? "Permintaan $nomor telah DIVERIFIKASI oleh Admin " .
+                      "({$admin->nama_lengkap}) dan diteruskan ke Pimpinan untuk " .
+                      "disposisi (prioritas {$permintaan->prioritas})."
+                    : "Permintaan $nomor telah DISETUJUI oleh Admin " .
+                      "({$admin->nama_lengkap}). Prioritas {$permintaan->prioritas} " .
+                      "tidak memerlukan persetujuan Pimpinan, barang siap diambil. " .
+                      "Tunjukkan QR Serah Terima ke Admin.";
+            } elseif ($keputusan === 'Rejected') {
+                $pesanUser = "Permintaan $nomor DITOLAK oleh Admin " .
+                             "({$admin->nama_lengkap}). Catatan: $catatan. " .
+                             "Silakan ajukan permintaan baru bila diperlukan.";
+            } else {
+                $pesanUser = "Permintaan $nomor perlu DIREVISI. Catatan dari Admin " .
+                             "({$admin->nama_lengkap}): $catatan. " .
+                             "Buka permintaan tersebut lalu tekan Revisi — nomor " .
+                             "permintaan tetap sama, tidak perlu membuat permintaan baru.";
+            }
 
-                $pimpinan = DB::table('users')
-                    ->where('role_id', 3)
-                    ->where('status_aktif', 'Aktif')
-                    ->get();
+            AlurPermintaan::notifikasi(
+                (int) $permintaan->user_id,
+                'Update Status Permintaan',
+                $pesanUser,
+                $permintaanId
+            );
 
-                foreach ($pimpinan as $p) {
-                    DB::table('notifikasi')->insert([
-                        'user_id'     => $p->id,
-                        'judul'       => 'Permintaan Menunggu Disposisi',
-                        'pesan'       => "Permintaan $nomor dari " .
-                                         ($pemohon->nama_lengkap ?? '-') . ' (' .
-                                         ($pemohon->bagian ?? '-') . ') ' .
-                                         'telah diverifikasi Admin dan menunggu persetujuan Anda.',
-                        'status_baca' => 'Belum Dibaca',
-                        'created_at'  => now(),
-                    ]);
+            if ($keputusan === 'Approved') {
+                if ($butuhPimpinan) {
+                    // Prioritas Penting → kabari semua Pimpinan aktif
+                    $pemohon = DB::table('users')->where('id', $permintaan->user_id)->first();
+
+                    AlurPermintaan::notifikasiKeRole(
+                        3,
+                        'Permintaan Menunggu Disposisi',
+                        "Permintaan $nomor dari " . ($pemohon->nama_lengkap ?? '-') . ' (' .
+                        ($pemohon->bagian ?? '-') . ') prioritas Penting ' .
+                        'telah diverifikasi Admin dan menunggu persetujuan Anda.',
+                        $permintaanId
+                    );
+                } else {
+                    // Final di Admin → terbitkan QR, kabari Admin lain
+                    AlurPermintaan::terbitkanQrJikaSiap($permintaanId);
+
+                    AlurPermintaan::notifikasiKeRole(
+                        1,
+                        'Permintaan Siap Didistribusikan',
+                        "Permintaan $nomor sudah diverifikasi dan siap diproses " .
+                        "(Scan Checkout & Outbound).",
+                        $permintaanId,
+                        (int) $admin->id
+                    );
                 }
             }
         });
 
         $pesanSukses = [
-            'Approved' => "Permintaan $nomor diverifikasi dan diteruskan ke Pimpinan.",
+            'Approved' => $butuhPimpinan
+                ? "Permintaan $nomor diverifikasi dan diteruskan ke Pimpinan."
+                : "Permintaan $nomor diverifikasi dan siap didistribusikan " .
+                  "(tidak perlu persetujuan Pimpinan).",
             'Rejected' => "Permintaan $nomor ditolak dan dikembalikan ke User.",
             'Revision' => "Permintaan $nomor dikembalikan ke User untuk direvisi.",
         ];

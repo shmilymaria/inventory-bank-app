@@ -27,31 +27,39 @@
     }
     $stateKembali = $statusNow === 'Rejected' ? 'rejected' : 'revision';
 
+    // Prioritas Normal/Mendesak cukup diverifikasi Admin; hanya Penting ke Pimpinan
+    $butuhPimpinan = \App\Support\AlurPermintaan::butuhPimpinan($permintaan->prioritas);
+    $siapDistribusi = \App\Support\AlurPermintaan::siapDistribusi($permintaan);
+
     $stepAdmin = match(true) {
         $statusNow === 'Pending'                    => 'current',
+        $statusNow === 'Cancelled'                  => 'cancelled',
         $isReturned && $tahapKembali === 'Admin'    => $stateKembali,
         default                                     => 'done',
     };
     $stepPimpinan = match(true) {
-        $statusNow === 'Pending'                    => 'pending',
+        !$butuhPimpinan                             => 'skipped',
+        in_array($statusNow, ['Pending', 'Cancelled']) => 'pending',
         $statusNow === 'Verified'                   => 'current',
         $isReturned && $tahapKembali === 'Admin'    => 'pending',
         $isReturned && $tahapKembali === 'Pimpinan' => $stateKembali,
         default                                     => 'done',
     };
-    $stepDistribusi = match($statusNow) {
-        'Distributed' => 'done',
-        'Approved'    => 'current',
-        default       => 'pending',
+    $stepDistribusi = match(true) {
+        $statusNow === 'Distributed' => 'done',
+        $siapDistribusi              => 'current',
+        default                      => 'pending',
     };
 
     $subText = [
         'done' => 'Selesai', 'current' => 'Menunggu', 'pending' => '—',
         'rejected' => 'Rejected', 'revision' => 'Revision',
+        'cancelled' => 'Dibatalkan', 'skipped' => 'Tidak perlu',
     ];
     $stateColor = [
         'done' => '#1565C0', 'current' => '#f59e0b', 'pending' => '#e2e8f0',
         'rejected' => '#ef4444', 'revision' => '#3b82f6',
+        'cancelled' => '#6b7280', 'skipped' => '#e2e8f0',
     ];
 
     $steps = [
@@ -60,14 +68,15 @@
         ['label' => 'Disposisi Pimpinan', 'icon' => 'bi-patch-check',       'state' => $stepPimpinan,   'sub' => $subText[$stepPimpinan]],
         ['label' => 'Distribusi',         'icon' => 'bi-truck',             'state' => $stepDistribusi, 'sub' => $subText[$stepDistribusi]],
     ];
-    $stateIcon = ['rejected' => 'bi-x-lg', 'revision' => 'bi-arrow-repeat'];
+    $stateIcon = ['rejected' => 'bi-x-lg', 'revision' => 'bi-arrow-repeat',
+                  'cancelled' => 'bi-slash-circle', 'skipped' => 'bi-dash-lg'];
 @endphp
 
 <div class="card mb-4">
     <div class="card-body py-3">
         <div class="d-flex align-items-center justify-content-center gap-0 flex-wrap">
             @foreach($steps as $i => $st)
-                @php $warna = $stateColor[$st['state']]; $aktif = $st['state'] !== 'pending'; @endphp
+                @php $warna = $stateColor[$st['state']]; $aktif = !in_array($st['state'], ['pending', 'skipped']); @endphp
 
                 <div class="text-center" style="min-width:120px;">
                     <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold mb-1"
@@ -114,6 +123,7 @@
                         $statusConfig = [
                             'Pending'     => ['bg' => '#fef3c7', 'color' => '#92400e',  'icon' => 'bi-hourglass-split'],
                             'Verified'    => ['bg' => '#cffafe', 'color' => '#155e75',  'icon' => 'bi-patch-check'],
+                            'Cancelled'   => ['bg' => '#e5e7eb', 'color' => '#374151',  'icon' => 'bi-slash-circle'],
                             'Approved'    => ['bg' => '#d1fae5', 'color' => '#065f46',  'icon' => 'bi-check-circle'],
                             'Rejected'    => ['bg' => '#fee2e2', 'color' => '#991b1b',  'icon' => 'bi-x-circle'],
                             'Revision'    => ['bg' => '#dbeafe', 'color' => '#1e40af',  'icon' => 'bi-arrow-repeat'],
@@ -273,9 +283,16 @@
             </div>
             <div class="card-body p-4">
                 <p class="small text-muted mb-3">
-                    Periksa permintaan ini terlebih dahulu. Jika <strong>Approved</strong>, permintaan
-                    diteruskan ke Pimpinan untuk disposisi. Jika <strong>Rejected</strong> /
-                    <strong>Revision</strong>, permintaan dikembalikan ke User beserta catatan Anda.
+                    Periksa permintaan ini terlebih dahulu. Prioritas
+                    <strong>{{ $permintaan->prioritas }}</strong>:
+                    @if($butuhPimpinan)
+                        jika <strong>Approved</strong>, permintaan diteruskan ke Pimpinan untuk disposisi.
+                    @else
+                        jika <strong>Approved</strong>, permintaan <strong>langsung siap didistribusikan</strong>
+                        (tidak memerlukan persetujuan Pimpinan).
+                    @endif
+                    Jika <strong>Rejected</strong> / <strong>Revision</strong>, permintaan dikembalikan ke
+                    User beserta catatan Anda (pada Revision, User merevisi di permintaan yang sama).
                 </p>
 
                 <form method="POST" action="{{ route('permintaan.verifikasi', $permintaan->id) }}"
@@ -286,7 +303,7 @@
                         <label class="form-label small fw-semibold">Keputusan <span class="text-danger">*</span></label>
                         <div class="d-flex gap-2 flex-wrap">
                             @foreach([
-                                'Approved' => ['Approved (Teruskan ke Pimpinan)', 'success'],
+                                'Approved' => [$butuhPimpinan ? 'Approved (Teruskan ke Pimpinan)' : 'Approved (Siap Distribusi)', 'success'],
                                 'Revision' => ['Revision (Minta Revisi)',         'primary'],
                                 'Rejected' => ['Rejected (Tolak)',                'danger'],
                             ] as $val => [$lbl, $clr])
@@ -326,7 +343,9 @@
                     return false;
                 }
                 const teks = {
-                    Approved: 'Teruskan permintaan ini ke Pimpinan?',
+                    Approved: @json($butuhPimpinan
+                        ? 'Teruskan permintaan ini ke Pimpinan?'
+                        : 'Setujui permintaan ini? Barang akan langsung siap didistribusikan.'),
                     Rejected: 'Tolak permintaan ini dan kembalikan ke User?',
                     Revision: 'Kembalikan permintaan ini ke User untuk direvisi?',
                 }[k.value];
@@ -393,6 +412,48 @@
             </div>
         </div>
 
+        {{-- Riwayat Perubahan (Edit / Revisi / Batal oleh pemohon) --}}
+        <div class="card mb-4">
+            <div class="card-header py-3" style="background:#1565C0;">
+                <h5 class="mb-0 text-white fw-semibold">
+                    <i class="bi bi-clock-history me-2"></i>Riwayat Perubahan
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                @forelse($riwayatPerubahan as $log)
+                    @php
+                        $logCfg = [
+                            'Edit'  => ['#dbeafe', '#1e40af', 'bi-pencil-square'],
+                            'Revisi'=> ['#fef3c7', '#92400e', 'bi-arrow-repeat'],
+                            'Batal' => ['#e5e7eb', '#374151', 'bi-slash-circle'],
+                        ][$log->jenis] ?? ['#f1f5f9', '#64748b', 'bi-circle'];
+                    @endphp
+                    <div class="d-flex gap-3 {{ $loop->last ? '' : 'pb-3 mb-3 border-bottom' }}">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                             style="width:38px;height:38px;background:{{ $logCfg[0] }};">
+                            <i class="bi {{ $logCfg[2] }}" style="color:{{ $logCfg[1] }};"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between flex-wrap gap-1">
+                                <div class="fw-semibold" style="color:{{ $logCfg[1] }};">{{ $log->jenis }}</div>
+                                <div class="text-muted small">
+                                    {{ \Carbon\Carbon::parse($log->created_at)->format('d M Y, H:i') }}
+                                </div>
+                            </div>
+                            <div class="small text-muted">oleh {{ $log->nama_pelaku }}</div>
+                            @if($log->ringkasan)
+                                <div class="small mt-1">{{ $log->ringkasan }}</div>
+                            @endif
+                        </div>
+                    </div>
+                @empty
+                    <div class="text-center text-muted small py-3">
+                        Belum ada perubahan. Permintaan masih seperti saat pertama diajukan.
+                    </div>
+                @endforelse
+            </div>
+        </div>
+
         {{-- Status Distribusi --}}
         <div class="card">
             <div class="card-header py-3" style="background:#1565C0;">
@@ -434,8 +495,8 @@
                             <i class="bi bi-truck fs-4" style="color:#5b21b6;"></i>
                         </div>
                         <div class="small">
-                            @if($permintaan->status_permintaan == 'Approved')
-                                Permintaan sudah disetujui.<br>
+                            @if($siapDistribusi)
+                                Permintaan sudah {{ $butuhPimpinan ? 'disetujui' : 'diverifikasi (tanpa Pimpinan)' }}.<br>
                                 <span class="text-primary fw-semibold">
                                     Proses distribusi melalui menu Distribusi.
                                 </span>
@@ -445,6 +506,8 @@
                                 Menunggu verifikasi Admin.
                             @elseif($permintaan->status_permintaan == 'Verified')
                                 Menunggu persetujuan Pimpinan.
+                            @elseif($permintaan->status_permintaan == 'Cancelled')
+                                Permintaan dibatalkan oleh pemohon.
                             @else
                                 Permintaan dikembalikan ke User (tidak diproses).
                             @endif

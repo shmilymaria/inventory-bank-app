@@ -149,6 +149,23 @@ class _VerifikasiListPageState extends State<VerifikasiListPage> {
               const SizedBox(width: 6),
               Text('$total jenis barang',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+              const SizedBox(width: 10),
+              // Alur setelah Admin menyetujui
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: (p['butuh_pimpinan'] == true
+                          ? Colors.purple : Colors.teal).shade50,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  p['butuh_pimpinan'] == true ? 'Perlu Pimpinan' : 'Admin saja',
+                  style: TextStyle(
+                      fontSize: 10.5, fontWeight: FontWeight.w600,
+                      color: (p['butuh_pimpinan'] == true
+                              ? Colors.purple : Colors.teal).shade700),
+                ),
+              ),
               const Spacer(),
               Text('Periksa',
                   style: TextStyle(
@@ -227,8 +244,8 @@ class _VerifikasiListPageState extends State<VerifikasiListPage> {
 
   Widget _prioritasBadge(String p) {
     Color color = Colors.grey;
-    if (p == 'Mendesak') color = Colors.red.shade600;
-    if (p == 'Penting')  color = Colors.orange.shade600;
+    if (p == 'Mendesak') color = Colors.amber.shade800;  // kuning
+    if (p == 'Penting')  color = Colors.red.shade600;    // merah
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(

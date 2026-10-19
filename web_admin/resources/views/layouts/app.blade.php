@@ -226,8 +226,10 @@ app.blade.php lama (edit 13.17)
            class="{{ request()->is('distribusi*') ? 'active' : '' }}">
             <i class="bi bi-truck"></i> Distribusi
             @php
-                $approvedSidebar = \Illuminate\Support\Facades\DB::table('permintaan')
-                    ->where('status_permintaan','Approved')->count();
+                // Siap didistribusikan: Approved, atau Verified prioritas Normal/Mendesak
+                $approvedSidebar = \App\Support\AlurPermintaan::scopeSiapDistribusi(
+                    \Illuminate\Support\Facades\DB::table('permintaan')
+                )->count();
             @endphp
             @if($approvedSidebar > 0)
                 <span class="nav-badge">{{ $approvedSidebar }}</span>

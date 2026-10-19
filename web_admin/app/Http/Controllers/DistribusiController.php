@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Barang;
+use App\Support\AlurPermintaan;
 
 class DistribusiController extends Controller
 {
@@ -13,12 +14,14 @@ class DistribusiController extends Controller
     // ----------------------------------------------------------------
     public function index(Request $request)
     {
-        // Permintaan berstatus Approved yang belum didistribusikan
+        // Permintaan yang siap didistribusikan & belum didistribusikan:
+        //   Approved (disetujui Pimpinan)  ATAU
+        //   Verified dengan prioritas Normal/Mendesak (cukup diverifikasi Admin)
         $siapDistribusi = DB::table('permintaan')
             ->join('users', 'permintaan.user_id', '=', 'users.id')
             ->leftJoin('distribusi', 'permintaan.id', '=', 'distribusi.permintaan_id')
             ->select('permintaan.*', 'users.nama_lengkap', 'users.bagian')
-            ->where('permintaan.status_permintaan', 'Approved')
+            ->where(function ($q) { AlurPermintaan::scopeSiapDistribusi($q); })
             ->whereNull('distribusi.id')
             ->orderBy('permintaan.id', 'asc')
             ->get();
@@ -74,7 +77,7 @@ class DistribusiController extends Controller
             ->join('users', 'permintaan.user_id', '=', 'users.id')
             ->select('permintaan.*', 'users.nama_lengkap', 'users.bagian', 'users.jabatan')
             ->where('permintaan.id', $permintaanId)
-            ->where('permintaan.status_permintaan', 'Approved')
+            ->where(function ($q) { AlurPermintaan::scopeSiapDistribusi($q); })
             ->firstOrFail();
 
         // Ambil detail item barang
@@ -118,10 +121,10 @@ class DistribusiController extends Controller
             'catatan_distribusi' => 'nullable|string|max:500',
         ]);
 
-        // Ambil data permintaan — pastikan statusnya Approved
+        // Ambil data permintaan — pastikan sudah siap didistribusikan
         $permintaan = DB::table('permintaan')
             ->where('id', $permintaanId)
-            ->where('status_permintaan', 'Approved')
+            ->where(function ($q) { AlurPermintaan::scopeSiapDistribusi($q); })
             ->firstOrFail();
 
         // Pastikan belum pernah didistribusikan
@@ -195,14 +198,13 @@ class DistribusiController extends Controller
             ]);
 
             // 4. Kirim notifikasi ke pemohon
-            DB::table('notifikasi')->insert([
-                'user_id'     => $permintaan->user_id,
-                'judul'       => 'Barang Telah Didistribusikan',
-                'pesan'       => 'Permintaan ' . $permintaan->nomor_permintaan .
-                                 ' telah selesai diproses dan barang sudah didistribusikan.',
-                'status_baca' => 'Belum Dibaca',
-                'created_at'  => now(),
-            ]);
+            AlurPermintaan::notifikasi(
+                (int) $permintaan->user_id,
+                'Barang Telah Didistribusikan',
+                'Permintaan ' . $permintaan->nomor_permintaan .
+                ' telah selesai diproses dan barang sudah didistribusikan.',
+                $permintaanId
+            );
 
         });
 

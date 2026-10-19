@@ -1,41 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:inventori_bank/constants/app_constants.dart';
 import 'package:inventori_bank/services/api_service.dart';
+import 'package:inventori_bank/utils/status_permintaan.dart';
 import 'package:inventori_bank/pages/user/detail_permintaan_page.dart';
 
 class RiwayatPermintaanPage extends StatefulWidget {
   const RiwayatPermintaanPage({super.key});
   @override
-  State<RiwayatPermintaanPage> createState() =>
-      RiwayatPermintaanPageState();
+  State<RiwayatPermintaanPage> createState() => RiwayatPermintaanPageState();
 }
 
-// State dibuat public agar bisa dipanggil dari UserMainPage
-class RiwayatPermintaanPageState
-    extends State<RiwayatPermintaanPage> {
+// State dibuat public agar bisa dipanggil dari UserMainPage / Beranda
+class RiwayatPermintaanPageState extends State<RiwayatPermintaanPage> {
   List<dynamic> _data    = [];
-  String        _filter  = '';
+  String        _filter  = ''; // '' = Semua
   bool          _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    muat();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    final ep  = _filter.isEmpty
+  /// Muat ulang daftar (dipakai juga saat tab dibuka kembali).
+  Future<void> muat() async {
+    final ep = _filter.isEmpty
         ? '/permintaan'
         : '/permintaan?status=$_filter';
     final res = await ApiService.get(ep);
+    if (!mounted) return;
     setState(() {
       _data    = res['data'] ?? [];
       _loading = false;
     });
   }
 
-  // Dipanggil dari UserMainPage saat tap permintaan di dashboard
+  /// Dari Beranda: tampilkan riwayat dengan status tertentu ('' = Semua).
+  void setFilter(String status) {
+    setState(() {
+      _filter  = status;
+      _loading = true;
+    });
+    muat();
+  }
+
+  // Dipanggil dari UserMainPage saat tap permintaan di dashboard / setelah kirim
   void bukaDetail(int permintaanId, String nomorPermintaan) {
     if (!mounted) return;
     Navigator.push(
@@ -46,7 +56,7 @@ class RiwayatPermintaanPageState
           nomorPermintaan: nomorPermintaan,
         ),
       ),
-    ).then((_) => _load());
+    ).then((_) => muat());
   }
 
   @override
@@ -54,6 +64,7 @@ class RiwayatPermintaanPageState
     const primary = Color(AppConstants.primaryColor);
 
     return Scaffold(
+      backgroundColor: const Color(AppConstants.bgColor),
       appBar: AppBar(
         title          : const Text('Riwayat Permintaan'),
         backgroundColor: primary,
@@ -61,72 +72,62 @@ class RiwayatPermintaanPageState
       ),
       body: Column(children: [
 
-        // ── Filter chips ──────────────────────────────────
+        // ── Tombol filter status ─────────────────────────
         Container(
           color  : Colors.white,
-          padding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.fromLTRB(16, 10, 0, 10),
           child  : SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: [
-                '', 'Pending', 'Verified', 'Approved',
-                'Rejected', 'Revision', 'Distributed',
-              ].map((s) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child  : FilterChip(
-                      label   : Text(s.isEmpty ? 'Semua' : s),
-                      selected: _filter == s,
-                      onSelected: (_) {
-                        setState(() => _filter = s);
-                        _load();
-                      },
-                      selectedColor  : const Color(
-                          AppConstants.primaryLightColor),
-                      checkmarkColor : primary,
-                      labelStyle     : TextStyle(
-                        color     : _filter == s
-                            ? primary : Colors.grey,
-                        fontWeight: _filter == s
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        fontSize  : 13,
-                      ),
+              children: ['', ...StatusPermintaan.semua].map((s) {
+                final aktif = _filter == s;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child  : ChoiceChip(
+                    label   : Text(s.isEmpty ? 'Semua' : s),
+                    selected: aktif,
+                    onSelected: (_) => setFilter(s),
+                    selectedColor: const Color(AppConstants.primaryLightColor),
+                    labelStyle: TextStyle(
+                      color     : aktif ? primary : Colors.grey.shade700,
+                      fontWeight: aktif ? FontWeight.bold : FontWeight.normal,
+                      fontSize  : 13,
                     ),
-                  ))
-                  .toList(),
+                  ),
+                );
+              }).toList(),
             ),
           ),
         ),
 
-        // ── List ─────────────────────────────────────────
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
-                  onRefresh: _load,
-                  color    : primary,
-                  child    : _data.isEmpty
-                      ? const Center(
-                          child: Column(
-                            mainAxisAlignment:
-                                MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.inbox_outlined,
-                                  size : 60,
-                                  color: Colors.grey),
-                              SizedBox(height: 12),
-                              Text('Belum ada permintaan.',
-                                  style: TextStyle(
-                                      color: Colors.grey)),
-                            ],
-                          ),
+                  onRefresh: muat,
+                  child: _data.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(vertical: 120),
+                          children: [
+                            Icon(Icons.inbox_outlined,
+                                size: 56, color: Colors.grey.shade400),
+                            const SizedBox(height: 10),
+                            Center(
+                              child: Text(
+                                _filter.isEmpty
+                                    ? 'Belum ada riwayat permintaan.'
+                                    : 'Tidak ada permintaan berstatus $_filter.',
+                                style: const TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                          ],
                         )
                       : ListView.builder(
-                          padding    : const EdgeInsets.all(16),
-                          itemCount  : _data.length,
-                          itemBuilder: (_, i) =>
-                              _card(context, _data[i]),
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _data.length,
+                          itemBuilder: (_, i) => _kartu(_data[i]),
                         ),
                 ),
         ),
@@ -134,145 +135,88 @@ class RiwayatPermintaanPageState
     );
   }
 
-  Widget _card(BuildContext context, dynamic p) {
-    final status = p['status_permintaan'] ?? '';
-    final color  = _statusColor(status);
-    final bg     = _statusBg(status);
-    final icon   = _statusIcon(status);
+  Widget _kartu(dynamic p) {
+    final status    = p['status_permintaan']?.toString() ?? '';
+    final prioritas = p['prioritas']?.toString() ?? '';
+    final warna     = Color(StatusPermintaan.warna(status));
+    final tanggal   = DateTime.tryParse(p['tanggal_permintaan']?.toString() ?? '');
+    final tglStr    = tanggal != null
+        ? DateFormat('dd MMM yyyy, HH:mm').format(tanggal) : '-';
+    final totalItem = p['total_item']?.toString();
 
-    return GestureDetector(
-      onTap: () => bukaDetail(
-        int.parse(p['id'].toString()),
-        p['nomor_permintaan'] ?? '-',
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(
+            color: Colors.black.withOpacity(0.05), blurRadius: 8)],
       ),
-      child: Container(
-        margin    : const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(
-              color    : Colors.black.withOpacity(0.05),
-              blurRadius: 8)],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child  : Row(children: [
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child  : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-            Container(
-              padding   : const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                  color       : Color(bg),
-                  borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: Color(color), size: 22),
+          Row(children: [
+            Expanded(
+              child: Text(p['nomor_permintaan']?.toString() ?? '-',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14.5)),
             ),
-
-            const SizedBox(width: 12),
-
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(p['nomor_permintaan'] ?? '-',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize  : 14)),
-                const SizedBox(height: 4),
-                Row(children: [
-                  const Icon(Icons.flag_outlined,
-                      size: 13, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(p['prioritas'] ?? '',
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.grey)),
-                ]),
-                const SizedBox(height: 2),
-                Row(children: [
-                  const Icon(Icons.calendar_today_outlined,
-                      size: 13, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(_formatDate(
-                      p['tanggal_permintaan'] ?? ''),
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.grey)),
-                ]),
-              ],
-            )),
-
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                      color       : Color(bg),
-                      borderRadius: BorderRadius.circular(20)),
-                  child: Text(status,
-                      style: TextStyle(
-                          color     : Color(color),
-                          fontSize  : 11,
-                          fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 6),
-                Row(children: [
-                  Text('Detail',
-                      style: TextStyle(
-                          fontSize: 11, color: Color(color))),
-                  Icon(Icons.chevron_right,
-                      size: 14, color: Color(color)),
-                ]),
-              ],
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Color(StatusPermintaan.latar(status)),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(StatusPermintaan.ikon(status), size: 13, color: warna),
+                const SizedBox(width: 4),
+                Text(status,
+                    style: TextStyle(
+                        fontSize: 11.5, fontWeight: FontWeight.bold,
+                        color: warna)),
+              ]),
             ),
           ]),
-        ),
+
+          const SizedBox(height: 4),
+          Text(tglStr,
+              style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+          const SizedBox(height: 6),
+          Text(StatusPermintaan.keterangan(status, prioritas: prioritas),
+              style: TextStyle(fontSize: 12, color: warna)),
+
+          const SizedBox(height: 10),
+          Row(children: [
+            Icon(Icons.flag_outlined, size: 15, color: Colors.grey.shade600),
+            const SizedBox(width: 4),
+            Text(prioritas,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+            if (totalItem != null) ...[
+              const SizedBox(width: 12),
+              Icon(Icons.inventory_2_outlined,
+                  size: 15, color: Colors.grey.shade600),
+              const SizedBox(width: 4),
+              Text('$totalItem barang',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+            ],
+            const Spacer(),
+            OutlinedButton(
+              onPressed: () => bukaDetail(
+                int.parse(p['id'].toString()),
+                p['nomor_permintaan']?.toString() ?? '',
+              ),
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Lihat Detail', style: TextStyle(fontSize: 12)),
+            ),
+          ]),
+        ]),
       ),
     );
-  }
-
-  int _statusColor(String s) {
-    const m = {
-      'Pending'    : 0xFF92400E,
-      'Verified'   : 0xFF155E75,
-      'Approved'   : 0xFF065F46,
-      'Rejected'   : 0xFF991B1B,
-      'Revision'   : 0xFF1E40AF,
-      'Distributed': 0xFF5B21B6,
-    };
-    return m[s] ?? 0xFF64748B;
-  }
-
-  int _statusBg(String s) {
-    const m = {
-      'Pending'    : 0xFFFEF3C7,
-      'Verified'   : 0xFFCFFAFE,
-      'Approved'   : 0xFFD1FAE5,
-      'Rejected'   : 0xFFFEE2E2,
-      'Revision'   : 0xFFDBEAFE,
-      'Distributed': 0xFFEDE9FE,
-    };
-    return m[s] ?? 0xFFF1F5F9;
-  }
-
-  IconData _statusIcon(String s) {
-    const m = {
-      'Pending'    : Icons.hourglass_empty,
-      'Verified'   : Icons.verified_outlined,
-      'Approved'   : Icons.check_circle_outline,
-      'Rejected'   : Icons.cancel_outlined,
-      'Revision'   : Icons.refresh,
-      'Distributed': Icons.local_shipping_outlined,
-    };
-    return m[s] ?? Icons.circle_outlined;
-  }
-
-  String _formatDate(String raw) {
-    if (raw.isEmpty) return '-';
-    try {
-      final dt = DateTime.parse(raw);
-      return '${dt.day.toString().padLeft(2, '0')}/'
-             '${dt.month.toString().padLeft(2, '0')}/'
-             '${dt.year}';
-    } catch (_) {
-      return raw;
-    }
   }
 }

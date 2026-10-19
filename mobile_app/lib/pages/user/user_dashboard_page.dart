@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:inventori_bank/constants/app_constants.dart';
 import 'package:inventori_bank/services/api_service.dart';
 import 'package:inventori_bank/services/auth_service.dart';
+import 'package:inventori_bank/utils/status_permintaan.dart';
 import 'package:inventori_bank/pages/user/user_main_page.dart';
 
+/// Beranda User:
+///  1. Header: avatar inisial, sapaan, bagian/unit kerja, tombol notifikasi
+///  2. Ringkasan Permintaan (tiap kartu bisa ditekan → Riwayat sesuai status)
+///  3. Kategori Barang (→ tab Ajukan dengan kelompok yang dipilih)
+///  4. Permintaan Terbaru (5 terakhir)
 class UserDashboardPage extends StatefulWidget {
   // Referensi ke parent agar bisa navigasi antar tab
   final UserMainPageState? mainPageState;
@@ -11,10 +18,10 @@ class UserDashboardPage extends StatefulWidget {
   const UserDashboardPage({super.key, this.mainPageState});
 
   @override
-  State<UserDashboardPage> createState() => _UserDashboardPageState();
+  State<UserDashboardPage> createState() => UserDashboardPageState();
 }
 
-class _UserDashboardPageState extends State<UserDashboardPage> {
+class UserDashboardPageState extends State<UserDashboardPage> {
   Map<String, dynamic> _dash = {};
   Map<String, dynamic> _user = {};
   bool _loading = true;
@@ -22,356 +29,359 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   @override
   void initState() {
     super.initState();
-    _load();
+    muat();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  /// Muat ulang (dipanggil juga saat tab Beranda dibuka kembali).
+  Future<void> muat() async {
     final results = await Future.wait([
       ApiService.get('/dashboard'),
       AuthService.getUserData(),
     ]);
+    if (!mounted) return;
     setState(() {
-      _dash    = (results[0] as Map<String, dynamic>)['data'] ?? {};
-      _user    = results[1] as Map<String, dynamic>;
+      _dash    = Map<String, dynamic>.from(results[0]['data'] ?? {});
+      _user    = results[1];
       _loading = false;
     });
+  }
+
+  int _n(String key) => int.tryParse((_dash[key] ?? 0).toString()) ?? 0;
+
+  String get _inisial {
+    final nama = (_user['nama_lengkap'] ?? '').toString().trim();
+    if (nama.isEmpty) return '?';
+    final kata = nama.split(RegExp(r'\s+'));
+    return kata.length == 1
+        ? kata[0][0].toUpperCase()
+        : (kata[0][0] + kata[1][0]).toUpperCase();
   }
 
   @override
   Widget build(BuildContext context) {
     const primary = Color(AppConstants.primaryColor);
-    final nama    = _user['nama_lengkap'] ?? '';
-    final bagian  = _user['bagian'] ?? '';
 
     return Scaffold(
       backgroundColor: const Color(AppConstants.bgColor),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _load,
+              onRefresh: muat,
               color    : primary,
-              child    : CustomScrollView(slivers: [
-
-                // ── AppBar ─────────────────────────────────
-                SliverAppBar(
-                  expandedHeight: 160,
-                  pinned        : true,
-                  automaticallyImplyLeading: false,
-                  backgroundColor: primary,
-                  flexibleSpace : FlexibleSpaceBar(
-                    background: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Color(AppConstants.primaryColor),
-                            Color(AppConstants.primaryDarkColor),
-                          ],
-                          begin: Alignment.topLeft,
-                          end  : Alignment.bottomRight,
-                        ),
-                      ),
-                      child: SafeArea(child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child  : Column(
-                          mainAxisAlignment : MainAxisAlignment.end,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [Row(children: [
-                            CircleAvatar(
-                              radius         : 24,
-                              backgroundColor: Colors.white24,
-                              child: Text(
-                                nama.isNotEmpty
-                                    ? nama[0].toUpperCase() : 'U',
-                                style: const TextStyle(
-                                    color     : Colors.white,
-                                    fontSize  : 20,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Halo, $nama 👋',
-                                    style: const TextStyle(
-                                        color     : Colors.white,
-                                        fontSize  : 16,
-                                        fontWeight: FontWeight.bold),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis),
-                                Text(bagian,
-                                    style: const TextStyle(
-                                        color  : Colors.white70,
-                                        fontSize: 12)),
-                              ],
-                            )),
-                            Stack(children: [
-                              const Icon(Icons.notifications_outlined,
-                                  color: Colors.white, size: 26),
-                              if ((_dash['notifikasi_belum_dibaca']
-                                      ?? 0) >
-                                  0)
-                                Positioned(
-                                  right: 0, top: 0,
-                                  child: Container(
-                                    width : 9, height: 9,
-                                    decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle),
-                                  ),
-                                ),
-                            ]),
-                          ])],
-                        ),
-                      )),
+              child    : SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child  : Column(children: [
+                  _header(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    child  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_n('revision') > 0) ...[
+                          _bannerRevisi(),
+                          const SizedBox(height: 16),
+                        ],
+                        _ringkasan(),
+                        const SizedBox(height: 22),
+                        _kategori(),
+                        const SizedBox(height: 22),
+                        _terbaru(),
+                      ],
                     ),
                   ),
-                ),
-
-                SliverToBoxAdapter(child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child  : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-
-                      // ── Stat Cards ──────────────────────
-                      const Text('Ringkasan Permintaan',
-                          style: TextStyle(
-                              fontSize  : 16,
-                              fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-
-                      GridView.count(
-                        shrinkWrap      : true,
-                        physics         : const NeverScrollableScrollPhysics(),
-                        crossAxisCount  : 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing : 12,
-                        childAspectRatio: 1.6,
-                        children: [
-                          _statCard('Total',
-                              '${_dash['total_permintaan'] ?? 0}',
-                              Icons.file_copy_outlined,
-                              0xFF1565C0, 0xFFE3F2FD),
-                          _statCard('Pending',
-                              '${_dash['pending'] ?? 0}',
-                              Icons.hourglass_empty,
-                              0xFF92400E, 0xFFFEF3C7),
-                          _statCard('Approved',
-                              '${_dash['approved'] ?? 0}',
-                              Icons.check_circle_outline,
-                              0xFF065F46, 0xFFD1FAE5),
-                          _statCard('Distributed',
-                              '${_dash['distributed'] ?? 0}',
-                              Icons.local_shipping_outlined,
-                              0xFF5B21B6, 0xFFEDE9FE),
-                        ],
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // ── Permintaan Terbaru ───────────────
-                      Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Permintaan Terbaru',
-                              style: TextStyle(
-                                  fontSize  : 16,
-                                  fontWeight: FontWeight.bold)),
-                          // Tombol lihat semua → ke tab Riwayat
-                          TextButton(
-                            onPressed: () =>
-                                widget.mainPageState?.goToTab(1),
-                            child: const Text('Lihat Semua'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      if (_dash['permintaan_terbaru'] == null ||
-                          (_dash['permintaan_terbaru'] as List)
-                              .isEmpty)
-                        _emptyWidget(
-                            'Belum ada permintaan.\n'
-                            'Gunakan tombol + di bawah untuk membuat permintaan baru.')
-                      else
-                        ...(_dash['permintaan_terbaru'] as List)
-                            .map((p) => _permintaanCard(p)),
-
-                      const SizedBox(height: 20),
-                    ],
-                  ),
-                )),
-              ]),
+                ]),
+              ),
             ),
     );
   }
 
-  // ── Card permintaan — tap untuk ke detail di tab Riwayat ─
-  Widget _permintaanCard(dynamic p) {
-    final status = p['status_permintaan'] ?? '';
-    final color  = _statusColor(status);
-    final bg     = _statusBg(status);
-    final icon   = _statusIcon(status);
+  // ── 1. Header ─────────────────────────────────────────────
+  Widget _header() {
+    final nama   = (_user['nama_lengkap'] ?? '').toString();
+    final bagian = (_user['bagian'] ?? '').toString();
+    final belumDibaca = _n('notifikasi_belum_dibaca');
 
-    return GestureDetector(
-      onTap: () {
-        // Navigasi ke tab Riwayat dan langsung buka detail
-        widget.mainPageState?.goToRiwayatDetail(
-          int.parse(p['id'].toString()),
-          p['nomor_permintaan'] ?? '-',
-        );
-      },
+    return Container(
+      width  : double.infinity,
+      padding: EdgeInsets.fromLTRB(
+          16, MediaQuery.of(context).padding.top + 14, 16, 22),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(AppConstants.primaryColor),
+            Color(AppConstants.primaryDarkColor),
+          ],
+          begin: Alignment.topLeft,
+          end  : Alignment.bottomRight,
+        ),
+      ),
+      child: Row(children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: Colors.white24,
+          child: Text(_inisial,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold,
+                  fontSize: 16)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Selamat datang,',
+                style: TextStyle(color: Colors.white70, fontSize: 12)),
+            Text(nama.isEmpty ? 'Pengguna' : nama,
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white, fontSize: 17,
+                    fontWeight: FontWeight.bold)),
+            if (bagian.isNotEmpty)
+              Text(bagian,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ]),
+        ),
+        // Tombol notifikasi → tab Notifikasi
+        InkWell(
+          onTap: () => widget.mainPageState?.goToTab(3),
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Badge(
+              isLabelVisible: belumDibaca > 0,
+              label: Text(belumDibaca > 99 ? '99+' : '$belumDibaca'),
+              child: const Icon(Icons.notifications_outlined,
+                  color: Colors.white, size: 26),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // ── Pengingat revisi ──────────────────────────────────────
+  Widget _bannerRevisi() => InkWell(
+    onTap: () => widget.mainPageState?.goToRiwayat('Revision'),
+    borderRadius: BorderRadius.circular(12),
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Row(children: [
+        Icon(Icons.refresh, color: Colors.blue.shade700, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text('${_n('revision')} permintaan perlu Anda revisi',
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600,
+                  color: Colors.blue.shade900)),
+        ),
+        Text('Lihat',
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w600,
+                color: Colors.blue.shade700)),
+        Icon(Icons.chevron_right, color: Colors.blue.shade700),
+      ]),
+    ),
+  );
+
+  // ── 2. Ringkasan Permintaan ───────────────────────────────
+  Widget _ringkasan() {
+    final kartu = <Map<String, dynamic>>[
+      {'label': 'Total',       'nilai': _n('total_permintaan'), 'status': '',            'warna': const Color(AppConstants.primaryColor), 'ikon': Icons.list_alt},
+      {'label': 'Pending',     'nilai': _n('pending'),          'status': 'Pending',     'warna': Color(StatusPermintaan.warna('Pending')),     'ikon': StatusPermintaan.ikon('Pending')},
+      {'label': 'Verified',    'nilai': _n('verified'),         'status': 'Verified',    'warna': Color(StatusPermintaan.warna('Verified')),    'ikon': StatusPermintaan.ikon('Verified')},
+      {'label': 'Approved',    'nilai': _n('approved'),         'status': 'Approved',    'warna': Color(StatusPermintaan.warna('Approved')),    'ikon': StatusPermintaan.ikon('Approved')},
+      {'label': 'Distributed', 'nilai': _n('distributed'),      'status': 'Distributed', 'warna': Color(StatusPermintaan.warna('Distributed')), 'ikon': StatusPermintaan.ikon('Distributed')},
+    ];
+
+    Widget tile(Map<String, dynamic> k) => InkWell(
+      onTap: () => widget.mainPageState?.goToRiwayat(k['status'] as String),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        margin    : const EdgeInsets.only(bottom: 10),
-        padding   : const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [BoxShadow(
-              color    : Colors.black.withOpacity(0.05),
-              blurRadius: 8)],
+              color: Colors.black.withOpacity(0.05), blurRadius: 8)],
         ),
-        child: Row(children: [
-          Container(
-            padding   : const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-                color       : Color(bg),
-                borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: Color(color), size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(p['nomor_permintaan'] ?? '-',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 13)),
-              Text(p['prioritas'] ?? '',
-                  style: const TextStyle(
-                      fontSize: 11, color: Colors.grey)),
-            ],
-          )),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding   : const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                    color       : Color(bg),
-                    borderRadius: BorderRadius.circular(20)),
-                child: Text(status,
-                    style: TextStyle(
-                        color     : Color(color),
-                        fontSize  : 11,
-                        fontWeight: FontWeight.w600)),
-              ),
-              const SizedBox(height: 4),
-              Row(children: [
-                Text('Detail',
-                    style: TextStyle(
-                        fontSize: 10, color: Color(color))),
-                Icon(Icons.chevron_right,
-                    size: 13, color: Color(color)),
-              ]),
-            ],
-          ),
+        child: Column(children: [
+          Icon(k['ikon'] as IconData, color: k['warna'] as Color, size: 22),
+          const SizedBox(height: 6),
+          Text('${k['nilai']}',
+              style: TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.bold,
+                  color: k['warna'] as Color)),
+          Text(k['label'] as String,
+              style: const TextStyle(fontSize: 11.5, color: Colors.black54)),
         ]),
       ),
     );
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Ringkasan Permintaan',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+      const SizedBox(height: 10),
+      GridView.count(
+        crossAxisCount  : 3,
+        shrinkWrap      : true,
+        physics         : const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: 10,
+        mainAxisSpacing : 10,
+        childAspectRatio: 1.05,
+        children: kartu.map(tile).toList(),
+      ),
+    ]);
   }
 
-  Widget _statCard(String title, String value,
-      IconData icon, int color, int bg) =>
-      Container(
-        padding   : const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(
-              color    : Colors.black.withOpacity(0.05),
-              blurRadius: 8)],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment : MainAxisAlignment.spaceBetween,
-          children: [
-            Container(
-              padding   : const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                  color       : Color(bg),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, color: Color(color), size: 20),
+  // ── 3. Kategori Barang ────────────────────────────────────
+  Widget _kategori() {
+    final daftar = <Map<String, dynamic>>[
+      {'label': 'Alat Tulis Kantor', 'kelompok': 'ATK',            'ikon': Icons.edit_outlined,        'warna': Colors.indigo},
+      {'label': 'Barang Cetakan',    'kelompok': 'Barang Cetakan', 'ikon': Icons.print_outlined,       'warna': Colors.teal},
+      {'label': 'Barang Lainnya',    'kelompok': 'Barang Lainnya', 'ikon': Icons.category_outlined,    'warna': Colors.orange},
+    ];
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Kategori Barang',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+      const SizedBox(height: 10),
+      Row(
+        children: daftar.map((k) {
+          final warna = k['warna'] as MaterialColor;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: k == daftar.last ? 0 : 10),
+              child: InkWell(
+                onTap: () => widget.mainPageState
+                    ?.goToAjukan(kelompok: k['kelompok'] as String),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+                  decoration: BoxDecoration(
+                    color: warna.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: warna.shade100),
+                  ),
+                  child: Column(children: [
+                    Icon(k['ikon'] as IconData, color: warna.shade700, size: 26),
+                    const SizedBox(height: 6),
+                    Text(k['label'] as String,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 11.5, fontWeight: FontWeight.w600,
+                            color: warna.shade900)),
+                  ]),
+                ),
+              ),
             ),
-            Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              Text(value,
-                  style: TextStyle(
-                      fontSize  : 22,
-                      fontWeight: FontWeight.bold,
-                      color     : Color(color))),
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 11, color: Colors.grey),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
-            ]),
-          ],
+          );
+        }).toList(),
+      ),
+    ]);
+  }
+
+  // ── 4. Permintaan Terbaru ─────────────────────────────────
+  Widget _terbaru() {
+    final list = (_dash['permintaan_terbaru'] as List?) ?? [];
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Expanded(
+          child: Text('Permintaan Terbaru',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         ),
-      );
+        TextButton(
+          onPressed: () => widget.mainPageState?.goToRiwayat(''),
+          child    : const Text('Lihat Semua'),
+        ),
+      ]),
+      const SizedBox(height: 4),
 
-  Widget _emptyWidget(String msg) => Container(
-    width  : double.infinity,
-    padding: const EdgeInsets.all(24),
-    decoration: BoxDecoration(
-        color       : Colors.white,
-        borderRadius: BorderRadius.circular(14)),
-    child: Column(children: [
-      const Icon(Icons.inbox_outlined, size: 48, color: Colors.grey),
-      const SizedBox(height: 8),
-      Text(msg,
-          textAlign: TextAlign.center,
-          style    : const TextStyle(
-              color: Colors.grey, fontSize: 13)),
-    ]),
-  );
+      if (list.isEmpty)
+        Container(
+          width  : double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(children: [
+            Icon(Icons.inbox_outlined, size: 44, color: Colors.grey.shade400),
+            const SizedBox(height: 8),
+            const Text('Belum ada permintaan.',
+                style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 4),
+            Text('Ketuk tombol + di bawah untuk mengajukan.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+          ]),
+        )
+      else
+        ...list.map((p) {
+          final status  = p['status_permintaan']?.toString() ?? '';
+          final warna   = Color(StatusPermintaan.warna(status));
+          final tanggal = DateTime.tryParse(p['tanggal_permintaan']?.toString() ?? '');
+          final tglStr  = tanggal != null
+              ? DateFormat('dd MMM yyyy').format(tanggal) : '-';
 
-  int _statusColor(String s) {
-    const m = {
-      'Pending'    : 0xFF92400E,
-      'Verified'   : 0xFF155E75,
-      'Approved'   : 0xFF065F46,
-      'Rejected'   : 0xFF991B1B,
-      'Revision'   : 0xFF1E40AF,
-      'Distributed': 0xFF5B21B6,
-    };
-    return m[s] ?? 0xFF64748B;
-  }
-
-  int _statusBg(String s) {
-    const m = {
-      'Pending'    : 0xFFFEF3C7,
-      'Verified'   : 0xFFCFFAFE,
-      'Approved'   : 0xFFD1FAE5,
-      'Rejected'   : 0xFFFEE2E2,
-      'Revision'   : 0xFFDBEAFE,
-      'Distributed': 0xFFEDE9FE,
-    };
-    return m[s] ?? 0xFFF1F5F9;
-  }
-
-  IconData _statusIcon(String s) {
-    const m = {
-      'Pending'    : Icons.hourglass_empty,
-      'Verified'   : Icons.verified_outlined,
-      'Approved'   : Icons.check_circle_outline,
-      'Rejected'   : Icons.cancel_outlined,
-      'Revision'   : Icons.refresh,
-      'Distributed': Icons.local_shipping_outlined,
-    };
-    return m[s] ?? Icons.circle_outlined;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(
+                  color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => widget.mainPageState?.goToRiwayatDetail(
+                int.parse(p['id'].toString()),
+                p['nomor_permintaan']?.toString() ?? '',
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child  : Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: Color(StatusPermintaan.latar(status)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(StatusPermintaan.ikon(status),
+                        size: 20, color: warna),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(p['nomor_permintaan']?.toString() ?? '-',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13.5)),
+                      const SizedBox(height: 2),
+                      Text('$tglStr · ${p['prioritas'] ?? ''}'
+                          '${p['total_item'] != null ? ' · ${p['total_item']} barang' : ''}',
+                          style: TextStyle(
+                              fontSize: 11.5, color: Colors.grey.shade600)),
+                    ]),
+                  ),
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text(status,
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.bold,
+                            color: warna)),
+                    const SizedBox(height: 2),
+                    const Text('Lihat Detail',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Color(AppConstants.primaryColor))),
+                  ]),
+                ]),
+              ),
+            ),
+          );
+        }),
+    ]);
   }
 }

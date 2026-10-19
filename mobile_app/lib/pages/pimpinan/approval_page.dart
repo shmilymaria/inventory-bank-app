@@ -360,12 +360,12 @@ class ApprovalPageState extends State<ApprovalPage> {
 
   Widget _prioritasBadge(String p) {
     Color bg, fg;
-    if (p == 'Mendesak') {
-      bg = const Color(0xFFFEE2E2);
-      fg = const Color(0xFF991B1B);
-    } else if (p == 'Penting') {
+    if (p == 'Mendesak') {          // kuning
       bg = const Color(0xFFFEF3C7);
       fg = const Color(0xFF92400E);
+    } else if (p == 'Penting') {    // merah
+      bg = const Color(0xFFFEE2E2);
+      fg = const Color(0xFF991B1B);
     } else {
       bg = const Color(0xFFF1F5F9);
       fg = const Color(0xFF64748B);

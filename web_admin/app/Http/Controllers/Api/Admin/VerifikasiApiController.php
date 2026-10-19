@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\VerifikasiService;
+use App\Support\AlurPermintaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -50,8 +51,9 @@ class VerifikasiApiController extends Controller
             ->orderBy('permintaan.id', 'asc') // yang paling lama menunggu di atas
             ->get()
             ->map(function ($p) {
-                $p->total_item = DB::table('detail_permintaan')
+                $p->total_item     = DB::table('detail_permintaan')
                     ->where('permintaan_id', $p->id)->count();
+                $p->butuh_pimpinan = AlurPermintaan::butuhPimpinan($p->prioritas);
                 return $p;
             });
 
@@ -109,9 +111,14 @@ class VerifikasiApiController extends Controller
         return response()->json([
             'success' => true,
             'data'    => [
-                'permintaan'       => $permintaan,
-                'detail_items'     => $detailItems,
-                'riwayat_approval' => $riwayatApproval,
+                'permintaan'        => $permintaan,
+                'detail_items'      => $detailItems,
+                'riwayat_approval'  => $riwayatApproval,
+                'riwayat_perubahan' => AlurPermintaan::riwayatPerubahan($id),
+                // Apa yang terjadi setelah Admin menyetujui?
+                'butuh_pimpinan'    => AlurPermintaan::butuhPimpinan($permintaan->prioritas),
+                'keterangan_alur'   => AlurPermintaan::keteranganAlur($permintaan->prioritas),
+                'siap_distribusi'   => AlurPermintaan::siapDistribusi($permintaan),
             ],
         ]);
     }
